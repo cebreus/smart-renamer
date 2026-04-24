@@ -1,0 +1,9 @@
+.cache/
+.eslintcache
+.output/
+.stylelintcache
+.temp/
+coverage/
+dist/
+node_modules/
+pnpm-lock.yaml

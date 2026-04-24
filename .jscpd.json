@@ -1,0 +1,18 @@
+{
+  "threshold": 2,
+  "minLines": 5,
+  "minTokens": 50,
+  "reporters": ["console"],
+  "absolute": false,
+  "ignore": [
+    "**/node_modules/**",
+    "**/.git/**",
+    "**/dist/**",
+    "**/build*/**",
+    "**/.temp/**",
+    "**/pnpm-lock.yaml"
+  ],
+  "formatsExts": {
+    "javascript": ["js", "mjs", "cjs"]
+  }
+}
