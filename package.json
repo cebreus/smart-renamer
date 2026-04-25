@@ -18,14 +18,16 @@
     "check:dupe": "jscpd",
     "check:deps": "depcruise index.js",
     "check:audit": "pnpm audit --prod --audit-level high",
-    "review": "coderabbit review",
+    "check:review": "coderabbit review",
+    "review:copilot": "node review-copilot.js",
     "check:quality": "pnpm check:lint && pnpm check:unused && pnpm check:dupe && pnpm check:deps",
-    "check:all": "pnpm check:quality && pnpm check:audit && pnpm check:review",
+    "check:quality-full": "pnpm check:quality && pnpm check:audit",
+    "check:all": "pnpm check:quality-full && pnpm check:review",
     "prepare": "simple-git-hooks"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm lint-staged",
-    "pre-push": "pnpm check:all"
+    "pre-push": "pnpm check:quality-full"
   },
   "lint-staged": {
     "*.{js,md,json}": "pnpm fix:format"

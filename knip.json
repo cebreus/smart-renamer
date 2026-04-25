@@ -1,6 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@next/schema.json",
   "project": ["**/*.js!"],
-  "ignoreBinaries": ["coderabbit"],
+  "ignoreBinaries": ["coderabbit", "gh"],
   "ignoreDependencies": ["remark-lint-thematic-break-marker"]
 }
