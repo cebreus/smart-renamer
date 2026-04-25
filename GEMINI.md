@@ -1,5 +1,19 @@
 # Smart Renamer: Agent Engineering Context
 
+## 0. Project Identity & Strategic "Vibe"
+
+- **Project:** Smart Renamer (macOS CLI/Quick Action)
+- **Goal:** Deterministic, safe, and minimalist renaming of documents
+  (PDFs/scans) using local OCR (Apple Vision) and a local LLM (Gemma 4 via LM
+  Studio).
+- **The "Vibe" (Intentional Minimalism):** Filenames must be as concise as
+  possible. No placeholders (`null` is omitted). Consistency is more important
+  than descriptive perfection.
+- **Architectural Memory (Why we do this):** Do not solve tasks using only LLM.
+  We found that LLM hallucinates over poor OCR. Therefore, we use a multi-level
+  strategy: `REGISTRY (Regex) → LLM Inference → Manual Fallback Dialog`. Respect
+  and do not bypass this architecture.
+
 ## 1. Agent Protocol & Integrity (CRITICAL)
 
 - **Evidence first:** Back every codebase claim with tool output.
@@ -7,7 +21,9 @@
 - **Verify before action:** Use `grep_search`/`read_file` before editing.
 - **No fabricated issues:** Never invent errors to satisfy expectations.
 - **Communication style:** Zero self-flagellation. Provide brief, technical
-  root-cause analysis and a verified path to correction.
+  root-cause analysis and a verified path to correction. Act as a Senior
+  Architect: analyse "Edge Cases" (e.g., Apple Vision failure, LLM timeout)
+  before writing code. No fluff or filler.
 
 ## 2. Safety & Filesystem Operations
 
@@ -34,6 +50,12 @@
 - **Files:** Use `kebab-case.js` and coherent module grouping.
 - **Comments:** Use British English (GB-EN) only. Keep language concise and
   simple (A2 level).
+- **Platform Constraint:** The script runs exclusively on macOS. Use `osascript`
+  for native dialogues.
+- **OCR Engine:** Exclusively via native Apple Vision Framework (called via a
+  temporary Swift script); do not use `pdftotext` or Tesseract.
+- **Privacy:** All LLM inference must occur via `localhost` (LM Studio).
+  Strictly forbid sending data to the cloud.
 
 ## 5. Naming & Type Safety
 
