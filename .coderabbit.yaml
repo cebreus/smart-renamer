@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: 'en-US'
+early_access: false
+tone_instructions: 'Focus on Node.js 22+ security and standards. CRITICAL: Validate that all code comments follow British English (GB-EN) and A2-level proficiency (simple, direct language).'
+
+reviews:
+  profile: 'assertive'
+  auto_review:
+    enabled: true
+    drafts: false
+  high_level_summary: true
+  poem: false
+
+knowledge_base:
+  code_guidelines:
+    filePatterns: ['GEMINI.md', 'docs/1-PRD.md']
