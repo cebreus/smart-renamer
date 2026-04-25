@@ -5,6 +5,7 @@ import n from 'eslint-plugin-n'
 import promise from 'eslint-plugin-promise'
 import * as regexp from 'eslint-plugin-regexp'
 import security from 'eslint-plugin-security'
+import sonarjs from 'eslint-plugin-sonarjs'
 import unicorn from 'eslint-plugin-unicorn'
 import globals from 'globals'
 
@@ -39,6 +40,12 @@ const ENGINEERING_STANDARDS = {
         message:
           'Top-level arrow functions are forbidden. Use named function declarations.',
       },
+      {
+        selector:
+          "CallExpression[callee.name='spawnSync'][arguments.length>0]:not([parent.type='VariableDeclarator'])",
+        message:
+          'spawnSync() results must be assigned to a variable for error and status checking.',
+      },
     ],
 
     // Top-level declarations: Named function only
@@ -56,16 +63,12 @@ const ENGINEERING_STANDARDS = {
 
     // Files: kebab-case.js
     'unicorn/filename-case': ['error', { case: 'kebabCase' }],
-
-    // Exports: Named exports only
-    // (Managed in no-restricted-syntax above)
   },
 }
 
 /**
  * AI_GUARDRAILS
  * Strict rules for AI code.
- * The goal is to keep code easy to read.
  */
 const AI_GUARDRAILS = {
   name: 'smart-renamer/ai-guardrails',
@@ -95,7 +98,6 @@ const AI_GUARDRAILS = {
 /** @type {import('eslint').Linter.Config[]} */
 export default [
   {
-    // Global ignores
     ignores: ['node_modules/', '.temp/', 'dist/', 'build*/', 'pnpm-lock.yaml'],
   },
 
@@ -105,9 +107,10 @@ export default [
   promise.configs['flat/recommended'],
   n.configs['flat/recommended-module'],
   security.configs.recommended,
+  sonarjs.configs.recommended,
   unicorn.configs.recommended,
 
-  // JSDoc: Required for new functions
+  // JSDoc
   {
     name: 'smart-renamer/jsdoc',
     plugins: { jsdoc },
@@ -163,14 +166,21 @@ export default [
       ],
       'promise/prefer-await-to-then': 'error',
       'promise/prefer-await-to-callbacks': 'error',
-      'security/detect-object-injection': 'off', // Disabled for mapping flexibility
+
+      // Security & Robustness Tightening
+      'security/detect-object-injection': 'off', // Keep off for mapping
+      'security/detect-child-process': 'error',
+      'security/detect-non-literal-fs-filename': 'error',
+      'sonarjs/no-duplicate-string': 'off', // Often nits in scripts
+      'sonarjs/cognitive-complexity': ['error', 10],
+      'sonarjs/no-redundant-jump': 'error',
     },
   },
 
   ENGINEERING_STANDARDS,
   AI_GUARDRAILS,
 
-  // Rules for config and test files
+  // Relaxation for configs
   {
     name: 'smart-renamer/config-relaxation',
     files: [
@@ -190,9 +200,9 @@ export default [
       'n/no-unpublished-import': 'off',
       'unicorn/prevent-abbreviations': 'off',
       'promise/prefer-await-to-then': 'off',
+      'sonarjs/cognitive-complexity': 'off',
     },
   },
 
-  // Prettier config must be last to disable conflicting rules
   prettierConfig,
 ]
