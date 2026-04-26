@@ -1,7 +1,7 @@
 # Systémová architektura: Smart Renamer
 
 Tento dokument popisuje technickou architekturu projektu Smart Renamer podle
-požadavků v [PRD.md](./1-PRD.md).
+požadavků v [1-PRD.md](./1-PRD.md).
 
 ## 1. Přehled systému
 
