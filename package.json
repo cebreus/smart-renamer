@@ -60,5 +60,9 @@
     "remark-preset-prettier": "^2.0.2",
     "simple-git-hooks": "^2.13.1",
     "unified": "^11.0.5"
+  },
+  "dependencies": {
+    "json5": "^2.2.3",
+    "safe-regex": "^2.1.1"
   }
 }
