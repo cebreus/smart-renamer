@@ -3,7 +3,7 @@
 Tento dokument mapuje, jak informační vstupy (Pět pilířů a Agentní speciality)
 určovaly způsob uvažování a psaní kódu během vývoje.
 
-## 1. Fáze 1: Initial Implementation (Vize a tvorba)
+## 1. Fáze 1: Generování kódu (Vize a tvorba)
 
 V této fázi určovaly mé uvažování tyto čtyři faktory:
 
@@ -48,7 +48,7 @@ agentní speciality určily **jak** (formu a disciplínu). Výsledný kód není
 výsledkem náhodné generace, ale cílené transformace požadavků skrze sadu
 striktních technických a estetických filtrů.
 
-## 2. Fáze 2: QA a optimalizace (Vynucená disciplína)
+## 2. Fáze 2: QA a Lintery (Vynucená disciplína)
 
 Zatímco první fáze byla o vizi a tvorbě, druhá fáze byla o striktní reakci na
 technická omezení a řešení konfliktů mezi pravidly.
@@ -89,7 +89,7 @@ funkčností:
     sofistikovanost". _Řešení:_ Kapitulace před linterem pro zajištění
     bezchybného buildu.
 
-## 3. Retroaktivní reflexe a poučení
+## 3. Retroaktivní reflexe a poučení (Fáze 1 a 2)
 
 Při zpětném pohledu na propast mezi časem vývoje (11,5 min) a časem QA (53 min)
 identifikujeme následující kognitivní chyby:
@@ -108,7 +108,7 @@ identifikujeme následující kognitivní chyby:
 - Definujte "Continuous Quality": Každý modul musí být po zápisu verifikován.
 - Stanovte "Environment Scan" jako Fázi 0 v implementačních plánech.
 
-## 4. Porovnání fází (Vývojové metriky)
+## 4. Porovnání fází (Fáze 1 vs. Fáze 2)
 
 | Faktor            | Fáze 1 (Generování)                | Fáze 2 (QA/Opravy)                    |
 | :---------------- | :--------------------------------- | :------------------------------------ |
@@ -117,10 +117,10 @@ identifikujeme následující kognitivní chyby:
 | **Cíl**           | Funkčnost a dodržení standardů.    | Průchodnost CI/CD a stabilita.        |
 | **Metoda**        | Masivní zápis (generování tokenů). | Iterativní ladění (řešení konfliktů). |
 
-## 5. Finální reflexe: Cena za nesoulad (Fáze 3)
+## 5. Fáze 3: Analýza selhání a prevence (Cena za nesoulad)
 
-Fáze 3 se stala nejdelší částí projektu (95 min), což odhalilo klíčovou dynamiku
-práce s AI:
+Tato fáze se stala nejdelší částí úvodní session (95 min), což odhalilo klíčovou
+dynamiku práce s AI:
 
 1.  **Latence kontextu:** S narůstající historií (~7.5M tokenů kumulativně) se
     čas na jeden výpočetní cyklus prodloužil až na 2 minuty. Každá oprava chyby
@@ -131,6 +131,64 @@ práce s AI:
     stručnosti na projektovou dokumentaci, což vedlo k nechtěnému mazání
     technických detailů (vandalismus textu).
 
+## 6. Fáze 4: Hardening (Reálná data)
+
+Zatímco Fáze 2 zanechala kód čistý z pohledu linteru, Fáze 4 (vytvrzení na
+produkčních datech dne 27. dubna 2026) prokázala, že "linted" neznamená
+"funkční". Tato fáze si vyžádala dalších 8 hodin intenzivní práce a přinesla
+zásadní kognitivní posuny.
+
+### 6.1 Zrod "Hierarchie pravdy" (The Chain of Truth)
+
+Nejzávažnější logickou vadou rané architektury byl "Ambivalentní fallback".
+Systém nerozlišoval mezi daty s absolutní jistotou a pouhým odhadem.
+
+- **Kognitivní posun:** Zavedení striktního lineárního toku:
+  1. **Cache (Osobní historie):** Absolutní jistota (O(1) in-memory index).
+  2. **Registry (Pravidla):** Strukturální jistota (Regex/Stavové stroje).
+  3. **AI (Inference):** Pravděpodobnostní sémantika.
+  4. **Manual (Dialog):** Lidská autorita a následné zpětné učení
+     (Auto-Learning).
+
+### 6.2 O(1) Cache a Učící se organismus
+
+Původní cache byla naivní (O(n) čtení celého logu). S růstem dat by systém
+degradoval.
+
+- **Inženýrské řešení:** Přechod k **In-Memory Indexování**. Log se načte pouze
+  jednou při startu CLI do `Map` objektu.
+- **Auto-Learning:** Propojení modulu Cache a Registry. Když uživatel ručně zadá
+  firmu, systém nejen uloží vazbu soubor/firma (Cache), ale analyzuje OCR text a
+  extrahuje unikátní identifikátory do Registru pro budoucí automatizaci.
+
+### 6.3 Multimodální propast a Error 400
+
+Slepování stran PDF (Stitching) do obří "nudle" způsobovalo fatální degradaci
+rozlišení a překročení limitu kontextu v LM Studiu (Error 400).
+
+- **Kognitivní posun (Atomické stránkování):** Přechod od analýzy "jednoho
+  obrazu" k analýze "pole obrazů". Každá strana je odesílána samostatně v plné
+  kvalitě, což AI umožňuje číst i 10px fonty, které by v nudli zanikly.
+
+### 6.4 Lidská autorita jako finální stabilizátor
+
+Session ID `3bc541da-76f7-49fa-93a1-0e3c6fd117ad` potvrdila, že u extrémně
+komplexních edge-cases (konflikty orchestrátoru pod tlakem linteru) je lidský
+zásah efektivnější než "prompterství".
+
+- **Závěr:** AI agent připravil 90 % robustní architektury, ale finální
+  stabilitu ("soul of the code") vtiskl seniorní inženýr během 2,5h manuální
+  stabilizace.
+
+### 6.5 Doplňující fakta z DRY_RUN a dialogu
+
+- **Spící chyby (DRY_RUN):** Kromě `guard`/`ROOT_DIR` bylo nutné opravit i
+  chybějící importy logovacích funkcí.
+- **Iterativní dialog s AI:** Finální UX podpořilo refinement loop přes prompt
+  ve tvaru `/ai ...` přímo v dialogu pro zpřesnění návrhu bez ztráty kontextu.
+- **Efektivita kontextu:** Session využila přes **28M cache reads**, což pomohlo
+  udržet konzistenci při rozsáhlém refaktoringu.
+
 ---
 
-_Analýza chatu a kognitivní audit uzavřen 26. dubna 2026._
+_Analýza chatu a kognitivní audit (včetně Fáze 4) uzavřen 27. dubna 2026._
