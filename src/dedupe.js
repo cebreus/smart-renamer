@@ -1,5 +1,5 @@
-import { createReadStream } from 'node:fs';
-import { createHash } from 'node:crypto';
+import { createHash } from 'node:crypto'
+import { createReadStream } from 'node:fs'
 
 /**
  * Calculates SHA-256 hash of a file using streams for memory efficiency.
@@ -9,39 +9,42 @@ import { createHash } from 'node:crypto';
  */
 export async function calculateHash(filePath) {
   return new Promise((resolve, reject) => {
-    const hash = createHash('sha256');
-    const stream = createReadStream(filePath);
+    const hash = createHash('sha256')
+    const stream = createReadStream(filePath)
 
     stream.on('data', (chunk) => {
-      hash.update(chunk);
-    });
+      hash.update(chunk)
+    })
 
     stream.on('end', () => {
-      resolve(hash.digest('hex'));
-    });
+      resolve(hash.digest('hex'))
+    })
 
     stream.on('error', (error) => {
-      reject(new Error(`Failed to calculate hash for ${filePath}`, { cause: error }));
-    });
-  });
+      reject(
+        new Error(`Failed to calculate hash for ${filePath}`, { cause: error })
+      )
+    })
+  })
 }
 
 /**
- * Creates a deduplication filter.
- * @returns {Function} - Returns true if hash is unique, false if seen before.
+ * Creates a deduplication filter function.
+ * @returns {function(string): boolean} - Deduplication function.
  */
 export function createDeduplicator() {
-  const seenHashes = new Set();
+  const seenHashes = new Set()
 
   /**
-   * @param {string} hash - SHA-256 hash to check.
-   * @returns {boolean}
+   * Checks if a hash has been seen before.
+   * @param {string} hash - SHA-256 hash.
+   * @returns {boolean} - True if unique.
    */
   return function isUnique(hash) {
     if (seenHashes.has(hash)) {
-      return false;
+      return false
     }
-    seenHashes.add(hash);
-    return true;
-  };
+    seenHashes.add(hash)
+    return true
+  }
 }

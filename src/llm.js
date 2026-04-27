@@ -1,5 +1,7 @@
-import { readFileSync } from 'node:fs';
-import { CONFIG } from './config.js';
+import { readFileSync } from 'node:fs'
+
+import { CONFIG } from './config.js'
+import { logError, logWarn } from './logger.js'
 
 /**
  * LLM Inference module for Smart Renamer.
@@ -13,19 +15,41 @@ import { CONFIG } from './config.js';
  */
 function isLocalhost(urlString) {
   try {
-    const url = new URL(urlString);
-    return ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+    const url = new URL(urlString)
+    return ['localhost', '127.0.0.1', '::1'].includes(url.hostname)
   } catch {
-    return false;
+    return false
+  }
+}
+
+/**
+ * Adds image content to messages if path is valid.
+ * @param {object[]} messages - Messages array.
+ * @param {string|undefined} imagePath - Path to image.
+ */
+function addImageContent(messages, imagePath) {
+  if (!imagePath) return
+  try {
+    const buffer = readFileSync(imagePath)
+    if (buffer.length <= CONFIG.IMAGE_MAX_BYTES) {
+      messages[1].content.push({
+        type: 'image_url',
+        image_url: {
+          url: `data:image/jpeg;base64,${buffer.toString('base64')}`,
+        },
+      })
+    }
+  } catch {
+    // Fallback to text only
   }
 }
 
 /**
  * Constructs the message array for the LLM.
- * @param {string} text
- * @param {string|undefined} imagePath
- * @param {string} originalName
- * @returns {object[]}
+ * @param {string} text - OCR text.
+ * @param {string|undefined} imagePath - Image path.
+ * @param {string} originalName - Original filename.
+ * @returns {object[]} - Messages array.
  */
 function constructMessages(text, imagePath, originalName) {
   const messages = [
@@ -47,31 +71,56 @@ Závazná pravidla:
     {
       role: 'user',
       content: [
-        { type: 'text', text: `Původní název: ${originalName}\n\nOCR Text:\n${text}` },
+        {
+          type: 'text',
+          text: `Původní název: ${originalName}\n\nOCR Text:\n${text}`,
+        },
       ],
     },
-  ];
+  ]
 
-  if (imagePath) {
-    try {
-      const buffer = readFileSync(imagePath);
-      if (buffer.length <= CONFIG.IMAGE_MAX_BYTES) {
-        messages[1].content.push({
-          type: 'image_url',
-          image_url: { url: `data:image/jpeg;base64,${buffer.toString('base64')}` },
-        });
-      }
-    } catch {
-      // Fallback
-    }
+  addImageContent(messages, imagePath)
+  return messages
+}
+
+/**
+ * Performs the actual fetch to LLM API.
+ * @param {object[]} messages - Messages array.
+ * @param {AbortSignal} signal - Abort signal.
+ * @returns {Promise<object|undefined>} - Result object.
+ */
+async function performInference(messages, signal) {
+  const response = await fetch(CONFIG.LM_STUDIO_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: CONFIG.MODEL,
+      messages,
+      temperature: CONFIG.TEMPERATURE,
+      max_tokens: CONFIG.MAX_TOKENS,
+      response_format: { type: 'json_object' },
+    }),
+    signal,
+  })
+
+  if (!response.ok)
+    throw new Error(`LLM API returned status ${response.status}`)
+
+  const data = await response.json()
+  const content = data.choices?.[0]?.message?.content
+  if (content) {
+    const jsonString = content
+      .replaceAll('```json', '')
+      .replaceAll('```', '')
+      .trim()
+    return JSON.parse(jsonString)
   }
-
-  return messages;
+  return undefined
 }
 
 /**
  * Analyzes document data using a local LLM.
- * @param {object} params
+ * @param {object} params - Parameters object.
  * @param {string} params.text - OCR text.
  * @param {string|undefined} params.imagePath - Path to the rendered JPG.
  * @param {string} params.originalName - Original filename for context.
@@ -79,44 +128,25 @@ Závazná pravidla:
  */
 export async function analyzeDocument({ text, imagePath, originalName }) {
   if (!isLocalhost(CONFIG.LM_STUDIO_URL)) {
-    throw new Error(`Security Violation: LM_STUDIO_URL (${CONFIG.LM_STUDIO_URL}) must be localhost.`);
+    throw new Error(
+      `Security Violation: LM_STUDIO_URL (${CONFIG.LM_STUDIO_URL}) must be localhost.`
+    )
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), CONFIG.LLM_TIMEOUT_MS);
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), CONFIG.LLM_TIMEOUT_MS)
 
   try {
-    const response = await fetch(CONFIG.LM_STUDIO_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: CONFIG.MODEL,
-        messages: constructMessages(text, imagePath, originalName),
-        temperature: CONFIG.TEMPERATURE,
-        max_tokens: CONFIG.MAX_TOKENS,
-        response_format: { type: 'json_object' },
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) throw new Error(`LLM API returned status ${response.status}`);
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) return;
-
-    const jsonString = content.replaceAll('```json', '').replaceAll('```', '').trim();
-    return JSON.parse(jsonString);
+    const messages = constructMessages(text, imagePath, originalName)
+    return await performInference(messages, controller.signal)
   } catch (error) {
     if (error.name === 'AbortError') {
-       
-      console.warn('LLM Inference timed out after 35s.');
+      logWarn('LLM Inference timed out after 35s.')
     } else {
-       
-      console.error('LLM Inference failed:', error.message);
+      logError(`LLM Inference failed: ${error.message}`)
     }
-    return;
   } finally {
-    clearTimeout(timeoutId);
+    clearTimeout(timeoutId)
   }
+  return undefined
 }

@@ -1,8 +1,8 @@
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const __dirname = path.dirname(fileURLToPath(new URL('.', import.meta.url)));
-const ROOT_DIR = path.join(__dirname, '..');
+const __dirname = path.dirname(fileURLToPath(new URL('.', import.meta.url)))
+const ROOT_DIR = path.join(__dirname, '..')
 
 /**
  * Project configuration following "Intentional Minimalism" and "Privacy First" principles.
@@ -31,4 +31,4 @@ export const CONFIG = {
 
   // Business Logic
   VALUE_BLACKLIST: [], // To be populated with specific patterns to ignore
-};
+}

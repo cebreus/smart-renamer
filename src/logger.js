@@ -1,44 +1,60 @@
-import { appendFileSync, statSync, renameSync, existsSync, unlinkSync } from 'node:fs';
-import { CONFIG } from './config.js';
+import {
+  appendFileSync,
+  existsSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+} from 'node:fs'
+
+import { CONFIG } from './config.js'
 
 /**
- * Transaction Logger module.
- * Cross-referenced with PRD FR-09.
+ * Custom Logger module for Smart Renamer.
+ * Handles both terminal output and file transactions.
+ * Satisfies strict no-console rules.
  */
 
-const MAX_LOG_SIZE = 10_485_760; // 10 MB
-const MAX_ROTATIONS = 3;
+const MAX_LOG_SIZE = 10_485_760 // 10 MB
+const MAX_ROTATIONS = 3
 
 /**
- * Performs log file rotation.
- * @param {string} logFile
+ * Shifts existing log rotation files.
+ * @param {string} logFile - Absolute path to log file.
  */
-function rotate(logFile) {
+function shiftRotations(logFile) {
   for (let index = MAX_ROTATIONS - 1; index >= 1; index -= 1) {
-    const oldName = `${logFile}.${index}`;
-    const newName = `${logFile}.${index + 1}`;
+    const oldName = `${logFile}.${index}`
+    const newName = `${logFile}.${index + 1}`
     if (existsSync(oldName)) {
       if (index + 1 > MAX_ROTATIONS) {
-        unlinkSync(oldName);
+        unlinkSync(oldName)
       } else {
-        renameSync(oldName, newName);
+        renameSync(oldName, newName)
       }
     }
   }
-  renameSync(logFile, `${logFile}.1`);
+}
+
+/**
+ * Performs log file rotation.
+ * @param {string} logFile - Absolute path to log file.
+ */
+function rotate(logFile) {
+  shiftRotations(logFile)
+  renameSync(logFile, `${logFile}.1`)
 }
 
 /**
  * Rotates logs if the current log file exceeds the size limit.
  */
 function rotateLogsIfNeeded() {
-  const logFile = CONFIG.LOG_FILE;
-  if (!existsSync(logFile)) return;
+  const logFile = CONFIG.LOG_FILE
+  if (!existsSync(logFile)) return
 
   try {
-    const stats = statSync(logFile);
+    const stats = statSync(logFile)
     if (stats.size >= MAX_LOG_SIZE) {
-      rotate(logFile);
+      rotate(logFile)
     }
   } catch {
     // Silent fail
@@ -46,20 +62,44 @@ function rotateLogsIfNeeded() {
 }
 
 /**
+ * Logs a general message to the terminal.
+ * @param {string} message - Message to log.
+ */
+export function logInfo(message) {
+  process.stdout.write(`${message}\n`)
+}
+
+/**
+ * Logs a warning to the terminal.
+ * @param {string} message - Warning message.
+ */
+export function logWarn(message) {
+  process.stderr.write(`[WARN] ${message}\n`)
+}
+
+/**
+ * Logs an error to the terminal.
+ * @param {string} message - Error message.
+ */
+export function logError(message) {
+  process.stderr.write(`[ERROR] ${message}\n`)
+}
+
+/**
  * Logs an atomic transaction to the JSONL log file.
- * @param {object} record - Transaction data.
+ * @param {object} record - Transaction data object.
  */
 export function logTransaction(record) {
   const entry = {
     ts: new Date().toISOString(),
     ...record,
-  };
+  }
 
   try {
-    const line = JSON.stringify(entry) + '\n';
-    appendFileSync(CONFIG.LOG_FILE, line, 'utf8');
-    rotateLogsIfNeeded();
+    const line = JSON.stringify(entry) + '\n'
+    appendFileSync(CONFIG.LOG_FILE, line, 'utf8')
+    rotateLogsIfNeeded()
   } catch {
-    // Silent fail
+    // Silent fail for file logging
   }
 }

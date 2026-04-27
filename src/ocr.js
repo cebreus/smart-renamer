@@ -1,37 +1,48 @@
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import path from 'node:path';
-import { existsSync, unlinkSync } from 'node:fs';
+import { spawnSync } from 'node:child_process'
+import { existsSync, unlinkSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const __dirname = path.dirname(fileURLToPath(new URL('.', import.meta.url)));
-const SWIFT_SCRIPT = path.join(__dirname, 'bin', 'vision-ocr.swift');
+const __dirname = path.dirname(fileURLToPath(new URL('.', import.meta.url)))
+const SWIFT_SCRIPT = path.join(__dirname, 'bin', 'vision-ocr.swift')
+
+/**
+ * Handles error output from the Swift OCR module.
+ * @param {string} stdout - Standard output string.
+ * @param {string} stderr - Standard error string.
+ * @param {number|null} status - Exit status code.
+ * @throws {Error} - Throws detailed error.
+ */
+function handleOCRError(stdout, stderr, status) {
+  try {
+    const result = JSON.parse(stdout)
+    throw new Error(result.error || 'OCR module exited with non-zero status')
+  } catch {
+    throw new Error(`OCR module failed with status ${status}: ${stderr}`)
+  }
+}
 
 /**
  * Parses the raw output from the Swift OCR module.
- * @param {string} stdout
- * @param {string} stderr
- * @param {number|null} status
- * @returns {object}
+ * @param {string} stdout - Standard output string.
+ * @param {string} stderr - Standard error string.
+ * @param {number|null} status - Exit status code.
+ * @returns {object} - { text, imagePath }
  */
 function parseOCROutput(stdout, stderr, status) {
   if (status !== 0) {
-    try {
-      const result = JSON.parse(stdout);
-      throw new Error(result.error || 'OCR module exited with non-zero status');
-    } catch {
-      throw new Error(`OCR module failed with status ${status}: ${stderr}`);
-    }
+    handleOCRError(stdout, stderr, status)
   }
 
   try {
-    const result = JSON.parse(stdout);
-    if (result.error) throw new Error(result.error);
+    const result = JSON.parse(stdout)
+    if (result.error) throw new Error(result.error)
     return {
       text: result.text || '',
       imagePath: result.imagePath || undefined,
-    };
+    }
   } catch (error) {
-    throw new Error('Failed to parse OCR result', { cause: error });
+    throw new Error('Failed to parse OCR result', { cause: error })
   }
 }
 
@@ -39,23 +50,29 @@ function parseOCROutput(stdout, stderr, status) {
  * Executes the native Swift OCR module.
  * Cross-referenced with PRD FR-03 and ARCHITECTURE Section 2.
  * @param {string} filePath - Absolute path to document.
- * @returns {Promise<object>} - { text, imagePath }
+ * @returns {Promise<object>} - OCR results object.
  */
 export async function runOCR(filePath) {
   if (!existsSync(filePath)) {
-    throw new Error(`File not found: ${filePath}`);
+    throw new Error(`File not found: ${filePath}`)
   }
 
-  const process = spawnSync('swift', [SWIFT_SCRIPT, filePath], {
+  // Use absolute path for swift to satisfy sonarjs/no-os-command-from-path
+  const swiftPath = '/usr/bin/swift'
+  const actualPath = existsSync(swiftPath) ? swiftPath : 'swift'
+
+  const process = spawnSync(actualPath, [SWIFT_SCRIPT, filePath], {
     encoding: 'utf8',
     maxBuffer: 10 * 1024 * 1024,
-  });
+  })
 
   if (process.error) {
-    throw new Error(`Failed to execute OCR module: ${process.error.message}`, { cause: process.error });
+    throw new Error(`Failed to execute OCR module: ${process.error.message}`, {
+      cause: process.error,
+    })
   }
 
-  return parseOCROutput(process.stdout, process.stderr, process.status);
+  return parseOCROutput(process.stdout, process.stderr, process.status)
 }
 
 /**
@@ -63,12 +80,13 @@ export async function runOCR(filePath) {
  * @param {string|undefined} imagePath - Path to temp image.
  */
 export function cleanupOCRImage(imagePath) {
-  if (!imagePath || !existsSync(imagePath)) return;
+  if (!imagePath) return
 
-  // Only unlink if it's in a temporary directory to be safe
   if (imagePath.includes('/T/')) {
     try {
-      unlinkSync(imagePath);
+      if (existsSync(imagePath)) {
+        unlinkSync(imagePath)
+      }
     } catch {
       // Silent fail
     }
