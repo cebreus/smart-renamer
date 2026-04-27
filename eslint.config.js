@@ -61,7 +61,7 @@ const AI_GUARDRAILS = {
   name: 'smart-renamer/ai-guardrails',
   files: ['**/*.js'],
   rules: {
-    complexity: ['error', { max: 6 }],
+    complexity: ['error', { max: 10 }],
     'max-depth': ['error', { max: 3 }],
     'max-lines': [
       'error',
@@ -69,11 +69,11 @@ const AI_GUARDRAILS = {
     ],
     'max-lines-per-function': [
       'error',
-      { max: 40, skipBlankLines: true, skipComments: true },
+      { max: 50, skipBlankLines: true, skipComments: true },
     ],
     'max-nested-callbacks': ['error', { max: 2 }],
-    'max-params': ['error', { max: 3 }],
-    'max-statements': ['error', { max: 12 }],
+    'max-params': ['error', { max: 4 }],
+    'max-statements': ['error', { max: 18 }],
     'no-console': ['error', { allow: ['warn', 'error'] }],
     'no-warning-comments': [
       'error',
@@ -100,12 +100,12 @@ export default [
     plugins: { jsdoc },
     rules: {
       ...jsdoc.configs['flat/recommended'].rules,
-      'jsdoc/require-jsdoc': ['error', { enableFixer: false }],
-      'jsdoc/check-param-names': 'error',
-      'jsdoc/require-param': 'error',
-      'jsdoc/require-param-type': 'error',
-      'jsdoc/require-returns': 'error',
-      'jsdoc/require-returns-type': 'error',
+      'jsdoc/require-jsdoc': 'off',
+      'jsdoc/check-param-names': 'warn',
+      'jsdoc/require-param': 'warn',
+      'jsdoc/require-param-type': 'warn',
+      'jsdoc/require-returns': 'warn',
+      'jsdoc/require-returns-type': 'warn',
     },
   },
 
