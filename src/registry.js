@@ -1,78 +1,93 @@
-import { existsSync, readFileSync } from 'node:fs'
+/**
+ * @file Registry for matching file contents.
+ */
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import JSON5 from 'json5'
 import safeRegex from 'safe-regex'
 
 import { CONFIG } from './config.js'
+import { logger } from './logger.js'
 
 /**
- * Registry module for deterministic matching.
- * Cross-referenced with PRD FR-07 and LOE Section 9.
- */
-
-/**
- * Loads and validates the registry file.
- * @returns {Array<{pattern: string, company: string, title?: string}>} - Validated entries.
+ * Loads user registry from disk.
+ * @returns {Array<object>} Loaded registry.
  */
 export function loadRegistry() {
   const filePath = CONFIG.REGISTRY_FILE
-  if (!existsSync(filePath)) {
-    return []
-  }
-
+  if (!existsSync(filePath)) return []
   try {
     const content = readFileSync(filePath, 'utf8')
     const registry = JSON5.parse(content)
-
-    if (!Array.isArray(registry)) {
-      return []
-    }
-
-    // Validate each pattern for ReDoS safety
-    return registry.filter((entry) => {
-      if (!entry.pattern || !entry.company) {
-        return false
-      }
-      return safeRegex(entry.pattern)
-    })
+    return Array.isArray(registry)
+      ? registry.filter(
+          (entry) => entry.pattern && entry.company && safeRegex(entry.pattern)
+        )
+      : []
   } catch {
     return []
   }
 }
 
 /**
- * Attempts to match a single registry entry.
- * @param {string} text - OCR text.
+ * Adds new rule to registry based on user input.
  * @param {object} entry - Registry entry.
- * @returns {object|undefined} - Match result.
+ * @returns {void}
  */
+export function addRegistryRule(entry) {
+  if (!entry.pattern || !entry.company || !safeRegex(entry.pattern)) {
+    logger.debug('Neplatné pravidlo pro registr, přeskakuji zápis.')
+    return
+  }
+
+  const registry = loadRegistry()
+
+  const exists = registry.some(
+    (item) => item.pattern === entry.pattern && item.company === entry.company
+  )
+  if (exists) return
+
+  registry.push({
+    pattern: entry.pattern,
+    company: entry.company,
+    title: entry.title || undefined,
+  })
+
+  try {
+    writeFileSync(
+      CONFIG.REGISTRY_FILE,
+      JSON.stringify(registry, undefined, 2),
+      'utf8'
+    )
+    logger.warn(`Registr aktualizován: Přidáno pravidlo pro "${entry.company}"`)
+  } catch (error) {
+    logger.debug(`Chyba při zápisu do registru: ${error.message}`)
+  }
+}
+
 function tryMatchEntry(text, entry) {
   try {
     const regex = new RegExp(entry.pattern, 'i')
     if (regex.test(text)) {
-      return {
-        company: entry.company,
-        title: entry.title || undefined,
-      }
+      return { company: entry.company, title: entry.title }
     }
   } catch {
-    // Ignore invalid regex
+    void 0
   }
   return undefined
 }
 
 /**
- * Matches OCR text against the registry.
- * @param {string} text - OCR text to match.
- * @param {Array} registry - Loaded registry entries.
- * @returns {object} - { company, title }
+ * Tries to find match in registry by text.
+ * @param {string} text - Text of searched document.
+ * @param {Array<object>} registry - Loaded registry.
+ * @returns {object} Match result (company and category).
  */
 export function matchRegistry(text, registry) {
-  if (text && registry && registry.length > 0) {
+  if (text && registry?.length > 0) {
     for (const entry of registry) {
       const match = tryMatchEntry(text, entry)
       if (match) return match
     }
   }
-
   return { company: undefined, title: undefined }
 }
