@@ -1,20 +1,18 @@
+/**
+ * @file Module for building and cleaning filenames.
+ */
 import { existsSync, renameSync, statSync } from 'node:fs'
 import path from 'node:path'
-
-/**
- * Filename assembly and sanitization module.
- * Cross-referenced with PRD Section 2 and FR-08.
- */
 
 const FORBIDDEN_CHARS = /[:/\\|"*?<>]/g
 
 /**
- * Normalizes company name by removing legal suffixes.
- * @param {string} company - Company name string.
- * @returns {string|undefined} - Normalized name string.
+ * Normalises company name by removing legal suffixes.
+ * @param {string} company - Company name.
+ * @returns {string|undefined} Normalised name.
  */
 export function normalizeCompany(company) {
-  if (company) {
+  if (company && company !== 'null') {
     const suffixes = [
       's.r.o.',
       'a.s.',
@@ -33,76 +31,65 @@ export function normalizeCompany(company) {
       }
     }
 
-    return cleanName
+    return cleanName || undefined
   }
   return undefined
 }
 
-/**
- * Sanitizes a string for use in a filename.
- * @param {string} string_ - Raw string.
- * @returns {string} - Sanitized string.
- */
 function sanitize(string_) {
   if (!string_) return ''
   return string_.replaceAll(FORBIDDEN_CHARS, '').replaceAll(/\s+/g, ' ').trim()
 }
 
 /**
- * Normalizes description by removing marks and limiting words.
- * @param {string} title - Document title string.
- * @returns {string|undefined} - Normalized title string.
+ * Normalises title to max 6 words.
+ * @param {string} title - Original name.
+ * @returns {string|undefined} Normalised name.
  */
 export function normalizeTitle(title) {
-  if (title) {
-    return title
-      .replaceAll(/[™®©]/g, '')
-      .split(/\s+/)
-      .slice(0, 6)
-      .join(' ')
-      .trim()
+  if (title && title !== 'null') {
+    return (
+      title
+        .replaceAll(/[™®©]/g, '')
+        .split(/\s+/)
+        .slice(0, 6)
+        .join(' ')
+        .trim() || undefined
+    )
   }
   return undefined
 }
 
-/**
- * Adds company part to filename components.
- * @param {string[]} parts - Parts array.
- * @param {string|undefined} company - Company string.
- */
 function addCompanyPart(parts, company) {
-  if (company) {
-    const cleanCompany = sanitize(normalizeCompany(company))
+  const normalized = normalizeCompany(company)
+  if (normalized) {
+    const cleanCompany = sanitize(normalized)
     if (cleanCompany) parts.push(`(${cleanCompany})`)
   }
 }
 
-/**
- * Adds title part to filename components.
- * @param {string[]} parts - Parts array.
- * @param {string|undefined} title - Title string.
- */
 function addTitlePart(parts, title) {
-  if (title) {
-    const cleanTitle = sanitize(normalizeTitle(title))
+  const normalized = normalizeTitle(title)
+  if (normalized) {
+    const cleanTitle = sanitize(normalized)
     if (cleanTitle) parts.push(cleanTitle)
   }
 }
 
 /**
- * Assembles the new filename components into a string.
- * @param {object} components - Components object.
- * @param {string} [components.date] - Date string.
- * @param {string} [components.company] - Company string.
- * @param {string} [components.title] - Title string.
- * @param {string} components.extension - File extension.
- * @param {boolean} components.isMtime - Fallback flag.
- * @returns {string} - Assembled filename string.
+ * Builds final filename from parts.
+ * @param {object} params - Build parameters.
+ * @param {string} params.date - Date.
+ * @param {string} params.company - Company.
+ * @param {string} params.title - Title.
+ * @param {string} params.extension - File extension.
+ * @param {boolean} params.isMtime - If MTime was used.
+ * @returns {string} Built name.
  */
 export function assembleFilename({ date, company, title, extension, isMtime }) {
   const parts = []
 
-  if (date) {
+  if (date && date !== 'null') {
     parts.push(isMtime ? `~${date}` : date)
   }
 
@@ -119,13 +106,6 @@ export function assembleFilename({ date, company, title, extension, isMtime }) {
   return `${baseName}${extension_}`
 }
 
-/**
- * Calculates safe filename within byte limit.
- * @param {string} base - Base name string.
- * @param {string} suffix - Collision suffix string.
- * @param {string} extension - Extension string.
- * @returns {string} - Safe name string.
- */
 function getSafeName(base, suffix, extension) {
   let current = `${base}${suffix}${extension}`
   while (Buffer.byteLength(current, 'utf8') > 255) {
@@ -135,13 +115,6 @@ function getSafeName(base, suffix, extension) {
   return current
 }
 
-/**
- * Resolves name collisions and respects 255-byte limit.
- * @param {string} directory - Target directory.
- * @param {string} name - Desired name.
- * @param {string} extension - File extension.
- * @returns {string} - Final safe path string.
- */
 function resolveSafePath(directory, name, extension) {
   let finalName = getSafeName(name, '', extension)
   let counter = 0
@@ -156,10 +129,10 @@ function resolveSafePath(directory, name, extension) {
 }
 
 /**
- * Safely renames a file.
- * @param {string} oldPath - Absolute path string.
- * @param {string} newName - Desired new filename.
- * @returns {string} - Final absolute path.
+ * Safely renames file and solves collisions.
+ * @param {string} oldPath - Original path.
+ * @param {string} newName - New name.
+ * @returns {string} Final safe file path.
  */
 export function performRename(oldPath, newName) {
   const directory = path.dirname(oldPath)
@@ -171,9 +144,9 @@ export function performRename(oldPath, newName) {
 }
 
 /**
- * Gets file modification date.
- * @param {string} filePath - Absolute path to file.
- * @returns {string} - YYYY-MM-DD string.
+ * Gets last modification date (MTime).
+ * @param {string} filePath - File path.
+ * @returns {string} Date as YYYY-MM-DD.
  */
 export function getMtimeDate(filePath) {
   const stats = statSync(filePath)
