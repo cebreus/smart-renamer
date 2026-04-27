@@ -2,12 +2,12 @@ import path from 'node:path'
 
 import { CONFIG } from './config.js'
 import { analyzeDocument } from './llm.js'
-import { logError, logTransaction } from './logger.js'
+import { logError, logStatus, logTransaction } from './logger.js'
 import { cleanupOCRImage, runOCR } from './ocr.js'
 import { loadRegistry, matchRegistry } from './registry.js'
 import { assembleFilename, getMtimeDate, performRename } from './rename.js'
 import { sanitizeUserInput, showInputDialog } from './ui.js'
-import { extractDateFallback, logStatus } from './utilities.js'
+import { extractDateFallback } from './utilities.js'
 
 /**
  * Orchestrator module that connects all pipeline steps.

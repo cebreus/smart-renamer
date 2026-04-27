@@ -70,6 +70,15 @@ export function logInfo(message) {
 }
 
 /**
+ * Logs a status message with a step indicator.
+ * @param {number} step - Step number.
+ * @param {string} message - Status message.
+ */
+export function logStatus(step, message) {
+  logInfo(`[${step}/3] ${message}`)
+}
+
+/**
  * Logs a warning to the terminal.
  * @param {string} message - Warning message.
  */

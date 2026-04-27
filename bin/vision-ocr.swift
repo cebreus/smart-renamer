@@ -3,6 +3,7 @@ import Vision
 import PDFKit
 import CoreGraphics
 import ImageIO
+import UniformTypeIdentifiers
 
 /**
  * Swift OCR & PDF Renderer for Smart Renamer.
@@ -21,7 +22,7 @@ struct OCRResult: Codable {
     let error: String?
 }
 
-func exitWithError(_ message: String) {
+func exitWithError(_ message: String) -> Never {
     let result = OCRResult(text: "", imagePath: nil, error: message)
     if let data = try? JSONEncoder().encode(result), let output = String(data: data, encoding: .utf8) {
         print(output)
@@ -122,7 +123,7 @@ if isPDF {
                 let tempDir = NSTemporaryDirectory()
                 let tempURL = URL(fileURLWithPath: tempDir).appendingPathComponent(UUID().uuidString + ".jpg")
                 
-                if let destination = CGImageDestinationCreateWithURL(tempURL as CFURL, kUTTypeJPEG, 1, nil) {
+                if let destination = CGImageDestinationCreateWithURL(tempURL as CFURL, UTType.jpeg.identifier as CFString, 1, nil) {
                     let options: [CFString: Any] = [kCGImageDestinationLossyCompressionQuality: 0.8]
                     CGImageDestinationAddImage(destination, finalImage, options as CFDictionary)
                     if CGImageDestinationFinalize(destination) {

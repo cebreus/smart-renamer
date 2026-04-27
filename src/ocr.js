@@ -14,12 +14,18 @@ const SWIFT_SCRIPT = path.join(__dirname, 'bin', 'vision-ocr.swift')
  * @throws {Error} - Throws detailed error.
  */
 function handleOCRError(stdout, stderr, status) {
+  let errorMessage
   try {
     const result = JSON.parse(stdout)
-    throw new Error(result.error || 'OCR module exited with non-zero status')
+    errorMessage = result.error
   } catch {
-    throw new Error(`OCR module failed with status ${status}: ${stderr}`)
+    // Fallback to stderr if JSON parsing fails
   }
+
+  if (errorMessage) {
+    throw new Error(errorMessage)
+  }
+  throw new Error(`OCR module failed with status ${status}: ${stderr}`)
 }
 
 /**
