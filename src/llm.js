@@ -1,18 +1,11 @@
+/**
+ * @file Module for AI analysis of documents.
+ */
 import { readFileSync } from 'node:fs'
 
 import { CONFIG } from './config.js'
-import { logError, logWarn } from './logger.js'
+import { logger } from './logger.js'
 
-/**
- * LLM Inference module for Smart Renamer.
- * Cross-referenced with PRD Section 8.2, FR-05, FR-06 and NFR-04.
- */
-
-/**
- * Validates that the LLM URL points to localhost.
- * @param {string} urlString - The URL to validate.
- * @returns {boolean} - True if localhost.
- */
 function isLocalhost(urlString) {
   try {
     const url = new URL(urlString)
@@ -22,35 +15,6 @@ function isLocalhost(urlString) {
   }
 }
 
-/**
- * Adds image content to messages if path is valid.
- * @param {object[]} messages - Messages array.
- * @param {string|undefined} imagePath - Path to image.
- */
-function addImageContent(messages, imagePath) {
-  if (!imagePath) return
-  try {
-    const buffer = readFileSync(imagePath)
-    if (buffer.length <= CONFIG.IMAGE_MAX_BYTES) {
-      messages[1].content.push({
-        type: 'image_url',
-        image_url: {
-          url: `data:image/jpeg;base64,${buffer.toString('base64')}`,
-        },
-      })
-    }
-  } catch {
-    // Fallback to text only
-  }
-}
-
-/**
- * Constructs the message array for the LLM.
- * @param {string} text - OCR text.
- * @param {string|undefined} imagePath - Image path.
- * @param {string} originalName - Original filename.
- * @returns {object[]} - Messages array.
- */
 function constructMessages(text, imagePath, originalName) {
   const messages = [
     {
@@ -79,17 +43,29 @@ Závazná pravidla:
     },
   ]
 
-  addImageContent(messages, imagePath)
+  if (imagePath) {
+    try {
+      const buffer = readFileSync(imagePath)
+      if (buffer.length <= CONFIG.IMAGE_MAX_BYTES) {
+        messages[1].content.push({
+          type: 'image_url',
+          image_url: {
+            url: `data:image/jpeg;base64,${buffer.toString('base64')}`,
+          },
+        })
+      }
+    } catch {
+      void 0
+    }
+  }
+
   return messages
 }
 
-/**
- * Performs the actual fetch to LLM API.
- * @param {object[]} messages - Messages array.
- * @param {AbortSignal} signal - Abort signal.
- * @returns {Promise<object|undefined>} - Result object.
- */
 async function performInference(messages, signal) {
+  logger.debug(
+    `Odesílám dotaz na AI (${messages[1].content[0].text.length} znaků textu)...`
+  )
   const response = await fetch(CONFIG.LM_STUDIO_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -98,16 +74,17 @@ async function performInference(messages, signal) {
       messages,
       temperature: CONFIG.TEMPERATURE,
       max_tokens: CONFIG.MAX_TOKENS,
-      response_format: { type: 'json_object' },
     }),
     signal,
   })
 
-  if (!response.ok)
-    throw new Error(`LLM API returned status ${response.status}`)
+  if (!response.ok) {
+    throw new Error(`API vrátilo chybu ${response.status}`)
+  }
 
   const data = await response.json()
   const content = data.choices?.[0]?.message?.content
+  logger.debug(`Odpověď AI: "${content?.slice(0, 100)}..."`)
   if (content) {
     const jsonString = content
       .replaceAll('```json', '')
@@ -119,17 +96,17 @@ async function performInference(messages, signal) {
 }
 
 /**
- * Analyzes document data using a local LLM.
- * @param {object} params - Parameters object.
+ * Analyses document using LLM.
+ * @param {object} params - Analysis parameters.
  * @param {string} params.text - OCR text.
- * @param {string|undefined} params.imagePath - Path to the rendered JPG.
- * @param {string} params.originalName - Original filename for context.
- * @returns {Promise<object|undefined>} - Result object or undefined on failure.
+ * @param {string|undefined} params.imagePath - Image path.
+ * @param {string} params.originalName - Original name.
+ * @returns {Promise<object|undefined>} LLM result.
  */
 export async function analyzeDocument({ text, imagePath, originalName }) {
   if (!isLocalhost(CONFIG.LM_STUDIO_URL)) {
     throw new Error(
-      `Security Violation: LM_STUDIO_URL (${CONFIG.LM_STUDIO_URL}) must be localhost.`
+      `Zabezpečení: Adresa AI (${CONFIG.LM_STUDIO_URL}) musí být localhost.`
     )
   }
 
@@ -139,14 +116,7 @@ export async function analyzeDocument({ text, imagePath, originalName }) {
   try {
     const messages = constructMessages(text, imagePath, originalName)
     return await performInference(messages, controller.signal)
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      logWarn('LLM Inference timed out after 35s.')
-    } else {
-      logError(`LLM Inference failed: ${error.message}`)
-    }
   } finally {
     clearTimeout(timeoutId)
   }
-  return undefined
 }

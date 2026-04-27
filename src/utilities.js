@@ -1,25 +1,11 @@
 /**
- * General utilities for Smart Renamer.
- * Cross-referenced with PRD FR-05.
+ * @file General tools for Smart Renamer.
  */
 
-/**
- * Validates if the month and day are within valid ranges.
- * @param {number} day - Day component.
- * @param {number} month - Month component.
- * @returns {boolean} - True if ranges are valid.
- */
 function isDateRangeValid(day, month) {
   return month >= 1 && month <= 12 && day >= 1 && day <= 31
 }
 
-/**
- * Validates date components.
- * @param {number} day - Day (1-31).
- * @param {number} month - Month (1-12).
- * @param {number} year - Year (YYYY).
- * @returns {boolean} - True if valid.
- */
 function isValidDate(day, month, year) {
   if (!isDateRangeValid(day, month)) return false
   const date = new Date(year, month - 1, day)
@@ -30,11 +16,6 @@ function isValidDate(day, month, year) {
   )
 }
 
-/**
- * Parses date candidates from regex matches.
- * @param {string[]} match - Regex match array.
- * @returns {string|undefined} - Formatted date or undefined.
- */
 function parseDotsMatch(match) {
   const day = Number.parseInt(match[1], 10)
   const month = Number.parseInt(match[2], 10)
@@ -50,11 +31,6 @@ function parseDotsMatch(match) {
   return undefined
 }
 
-/**
- * Extracts ISO date candidates from text.
- * @param {string} text - OCR text.
- * @returns {string[]} - ISO date candidates.
- */
 function extractIsoDates(text) {
   const iso = /\b(\d{4})-(\d{2})-(\d{2})\b/g
   const candidates = []
@@ -74,10 +50,9 @@ function extractIsoDates(text) {
 }
 
 /**
- * Extracts dates from text using Regex with scoring.
- * Cross-referenced with PRD FR-05 Level 2.
- * @param {string} text - OCR text.
- * @returns {string|undefined} - YYYY-MM-DD or undefined.
+ * Extracts date from text using fallback regex.
+ * @param {string} text - Input text to search.
+ * @returns {string|undefined} Found date as YYYY-MM-DD or undefined.
  */
 export function extractDateFallback(text) {
   if (text) {
