@@ -61,25 +61,21 @@ jmenné exporty, žádné třídy):
 
 ## Plán implementace (Implementation Plan)
 
-1. **Fáze 1: Inicializace projektu a infrastruktury**
-   - Vytvoření adresářové struktury (`src`, `bin`).
-   - Nastavení výchozí konfigurace s ohledem na parametry LLM a operační limity
-     (`src/config.js`).
-2. **Fáze 2: OCR modul a vstupní filtry**
-   - Vytvoření Swift rozhraní (`vision-ocr.swift`) pro Vision Framework.
-   - Implementace streaming deduplikace přes SHA-256 (`src/dedupe.js`).
-3. **Fáze 3: Integrační byznys logika (Registry & LLM)**
-   - Vytvoření modulu pro ReDoS-safe vyhodnocování `registry.json`
-     (`src/registry.js`).
-   - Implementace klienta pro LM Studio s AbortControllerem (`src/llm.js`).
-4. **Fáze 4: Fallback, Sanitizace a Logování**
-   - Napsání modulu pro `osascript` dialogy s uživatelem (`src/ui.js`).
-   - Bezpečné sestavení názvů a filesystémové přejmenování (`src/rename.js`).
-   - Atomický rotující zápis do JSONL (`src/logger.js`).
-5. **Fáze 5: Orchestrace a testování**
-   - Sjednocení pipeline v `src/orchestrator.js`.
-   - Vytvoření vstupního bodu a propojení s CLI (`index.js`).
-   - Validace přes `pnpm check:all`.
+Povinná validace každé fáze přes `pnpm check:lint`.
+
+1. **Fáze 0: Scan prostředí**
+   - Analýza `eslint.config.js` (AI Guardrails) a adaptace stylu.
+2. **Fáze 1: Inicializace**
+   - Struktura (`src`, `bin`) a `src/config.js` (limity).
+3. **Fáze 2: OCR a filtry**
+   - `bin/vision-ocr.swift` (Vision Framework) a `src/dedupe.js` (SHA-256).
+4. **Fáze 3: Business logika**
+   - `src/registry.js` (ReDoS-safe) a `src/llm.js` (LM Studio).
+5. **Fáze 4: UI a Logování**
+   - `src/ui.js` (osascript), `src/rename.js` (sanitizace) a `src/logger.js`
+     (JSONL).
+6. **Fáze 5: Orchestrace**
+   - `src/orchestrator.js`, `index.js` (CLI) a `pnpm check:all`.
 
 ## Ověření a testování (Verification & Testing)
 
