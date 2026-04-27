@@ -14,7 +14,23 @@
   strategy: `REGISTRY (Regex) → LLM Inference → Manual Fallback Dialog`. Respect
   and do not bypass this architecture.
 
-## 1. Agent Protocol & Integrity (CRITICAL)
+## 1. Linter-First Supremacy (CRITICAL)
+
+- **Linter is Master:** Project linters (ESLint, Knip, Prettier) are the final
+  authority. Their rules override any aesthetic preferences from PRD or Design
+  docs.
+- **Pre-emptive Scan:** Always read config files (`eslint.config.js`,
+  `package.json`) BEFORE coding to identify hard constraints (e.g.,
+  max-statements: 12).
+- **Atomic Validation Loop:**
+  1. Write the first atomic module.
+  2. Run `pnpm check:lint` immediately.
+  3. Adjust coding style for the rest of the session based on results.
+- **Conflict Strategy:** If rules conflict (e.g., `consistent-return` vs
+  `unicorn`), STOP and propose a config change. Never use `eslint-disable`
+  without explicit user approval.
+
+## 2. Agent Protocol & Integrity
 
 - **Evidence first:** Back every codebase claim with tool output.
 - **If uncertain:** Say "I don't know, I will verify" and then verify.
@@ -25,7 +41,7 @@
   Architect: analyse "Edge Cases" (e.g., Apple Vision failure, LLM timeout)
   before writing code. No fluff or filler.
 
-## 2. Safety & Filesystem Operations
+## 3. Safety & Filesystem Operations
 
 - **Minimal diffs only:** Change only what is required.
 - **No overwrite edits:** Do not use `write_file` for existing files.
@@ -33,13 +49,13 @@
 - **Unsafe codebase:** Stop and ask before broad refactors.
 - **Before tools:** State what will change and why.
 
-## 3. Engineering Philosophy
+## 4. Engineering Philosophy
 
 - **Principles:** KISS, DRY, SOLID, YAGNI.
 - **Paradigm:** Functional/procedural; no classes.
 - **Top-level declarations:** Named `function` only (no top-level arrows).
 
-## 4. Strict Coding Standards
+## 5. Strict Coding Standards
 
 - **Runtime:** Node.js 22+, ESM only, stdlib imports with `node:`.
 - **Package Manager:** `pnpm` only (NEVER use `npm` or `yarn`).
@@ -57,7 +73,7 @@
 - **Privacy:** All LLM inference must occur via `localhost` (LM Studio).
   Strictly forbid sending data to the cloud.
 
-## 5. Naming & Type Safety
+## 6. Naming & Type Safety
 
 - **Booleans:** Prefix with `is/has/can/should`.
 - **Converters:** Use `extract/to/from/parse` naming.
@@ -66,7 +82,7 @@
 - **Validator contract:** Return `{ isValid, error }`.
 - **Constants:** Use SCREAMING_SNAKE_CASE for magic values.
 
-## 6. Execution Workflow & Checklist
+## 7. Execution Workflow & Checklist
 
 1. **Verify:** Confirm current state with tools.
 2. **Analyze:** Compare state with these standards.
@@ -82,7 +98,7 @@
 - \[ ] Preserved error chains with `Error.cause`?
 - \[ ] Passed `pnpm check:all`?
 
-## 7. Source Control & Safety Protocol (CRITICAL)
+## 8. Source Control & Safety Protocol
 
 - **Index is user-owned:** Do not stage/unstage (`git add*`, `git reset`,
   `git restore --staged`) unless explicitly requested.
@@ -98,7 +114,7 @@
   files.
 - **Transparency:** Run `git status` before and after any source-control action.
 
-## 8. Command Approval Profile
+## 9. Command Approval Profile
 
 - **Allow:** `ls`, `rg`, `grep`, `sed`, `git diff`, `git status`, `git log`,
   `git restore -- <path>`, `git stash list/show/push -m/apply/pop`,
