@@ -72,35 +72,58 @@ function resolveDate(text, absPath, initialDate) {
 }
 
 /**
+ * Logs the result of a rename operation.
+ * @param {object} params - Parameters.
+ * @param {string} params.absPath - Original path.
+ * @param {string} [params.newPath] - New path or filename.
+ * @param {string} params.method - Resolution method.
+ * @param {string} [params.error] - Error message.
+ */
+function logRenameResult({ absPath, newPath, method, error }) {
+  if (error) {
+    logError(`Rename failed: ${error}`)
+    logTransaction({ status: 'rename_failed', original_abs: absPath, error })
+    return
+  }
+
+  const resultName = path.basename(newPath)
+  const prefix = CONFIG.DRY_RUN ? '[DRY-RUN] ' : ''
+  logStatus(3, `${prefix}Přejmenováno na: ${resultName}`)
+
+  logTransaction({
+    status: CONFIG.DRY_RUN ? 'dry_run' : 'ok',
+    original_abs: absPath,
+    renamed_abs: CONFIG.DRY_RUN ? undefined : newPath,
+    intended_name: CONFIG.DRY_RUN ? resultName : undefined,
+    method,
+  })
+}
+
+/**
  * Finalizes the rename operation and logs result.
  * @param {string} absPath - Source path.
  * @param {string} newFilename - Target name.
  * @param {boolean} isMtime - Date fallback flag.
  */
 function finalizeRename(absPath, newFilename, isMtime) {
-  const currentBasename = path.basename(absPath)
-  if (newFilename === currentBasename) {
+  const method = isMtime ? 'mtime_fallback' : 'auto'
+
+  if (newFilename === path.basename(absPath)) {
     logStatus(3, 'Název je již optimální, přeskakuji.')
     logTransaction({ status: 'skipped_no_change', original_abs: absPath })
     return
   }
 
+  if (CONFIG.DRY_RUN) {
+    logRenameResult({ absPath, newPath: newFilename, method })
+    return
+  }
+
   try {
     const finalPath = performRename(absPath, newFilename)
-    logStatus(3, `Přejmenováno na: ${path.basename(finalPath)}`)
-    logTransaction({
-      status: 'ok',
-      original_abs: absPath,
-      renamed_abs: finalPath,
-      method: isMtime ? 'mtime_fallback' : 'auto',
-    })
+    logRenameResult({ absPath, newPath: finalPath, method })
   } catch (error) {
-    logError(`Rename failed: ${error.message}`)
-    logTransaction({
-      status: 'rename_failed',
-      original_abs: absPath,
-      error: error.message,
-    })
+    logRenameResult({ absPath, error: error.message })
   }
 }
 

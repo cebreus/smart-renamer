@@ -30,5 +30,6 @@ export const CONFIG = {
   LOG_FILE: path.join(ROOT_DIR, 'smart-renamer.log'),
 
   // Business Logic
+  DRY_RUN: process.env.DRY_RUN === 'true', // Default to false after verification
   VALUE_BLACKLIST: [], // To be populated with specific patterns to ignore
 }
