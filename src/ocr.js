@@ -1,13 +1,14 @@
-/**
- * @file Native macOS OCR module.
- */
 import { spawnSync } from 'node:child_process'
 import { existsSync, unlinkSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const __dirname = path.dirname(fileURLToPath(new URL('.', import.meta.url)))
-const SWIFT_SCRIPT = path.join(__dirname, 'bin', 'vision-ocr.swift')
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const SWIFT_SCRIPT = path.join(__dirname, '..', 'bin', 'vision-ocr.swift')
+
+/**
+ * OCR module - Page-by-Page Processing.
+ */
 
 function handleOCRError(stdout, stderr, status) {
   let errorMessage
@@ -15,7 +16,7 @@ function handleOCRError(stdout, stderr, status) {
     const result = JSON.parse(stdout)
     errorMessage = result.error
   } catch {
-    void 0
+    /* Fail silently */
   }
 
   if (errorMessage) {
@@ -24,27 +25,10 @@ function handleOCRError(stdout, stderr, status) {
   throw new Error(`OCR module failed with status ${status}: ${stderr}`)
 }
 
-function parseOCROutput(stdout, stderr, status) {
-  if (status !== 0) {
-    handleOCRError(stdout, stderr, status)
-  }
-
-  try {
-    const result = JSON.parse(stdout)
-    if (result.error) throw new Error(result.error)
-    return {
-      text: result.text || '',
-      imagePath: result.imagePath || undefined,
-    }
-  } catch (error) {
-    throw new Error('Failed to parse OCR result', { cause: error })
-  }
-}
-
 /**
- * Runs OCR on given file.
- * @param {string} filePath - Image or PDF path.
- * @returns {Promise<object>} Object with text and optional image path.
+ * Runs the Swift OCR module on a file.
+ * @param {string} filePath - Absolute path to file.
+ * @returns {Promise<object>} - { pages: [{ text, imagePath }] }
  */
 export async function runOCR(filePath) {
   if (!existsSync(filePath)) {
@@ -52,37 +36,38 @@ export async function runOCR(filePath) {
   }
 
   const swiftPath = '/usr/bin/swift'
-  const actualPath = existsSync(swiftPath) ? swiftPath : 'swift'
-
-  const process = spawnSync(actualPath, [SWIFT_SCRIPT, filePath], {
+  const process = spawnSync(swiftPath, [SWIFT_SCRIPT, filePath], {
     encoding: 'utf8',
-    maxBuffer: 10 * 1024 * 1024,
   })
 
-  if (process.error) {
-    throw new Error(`Failed to execute OCR module: ${process.error.message}`, {
-      cause: process.error,
-    })
+  if (process.status !== 0 || process.error) {
+    handleOCRError(process.stdout, process.stderr, process.status)
   }
 
-  return parseOCROutput(process.stdout, process.stderr, process.status)
+  try {
+    return JSON.parse(process.stdout)
+  } catch (error) {
+    throw new Error(`Failed to parse OCR output: ${error.message}`, {
+      cause: error,
+    })
+  }
 }
 
 /**
- * Deletes temporary OCR image.
- * @param {string} imagePath - Image path.
- * @returns {void}
+ * Cleans up temporary page images.
+ * @param {object[]} pages - Array of page objects.
  */
-export function cleanupOCRImage(imagePath) {
-  if (!imagePath) return
-
-  if (imagePath.includes('/T/')) {
-    try {
-      if (existsSync(imagePath)) {
-        unlinkSync(imagePath)
+export function cleanupOCRPages(pages) {
+  if (!pages || !Array.isArray(pages)) {
+    return
+  }
+  for (const page of pages) {
+    if (page.imagePath && existsSync(page.imagePath)) {
+      try {
+        unlinkSync(page.imagePath)
+      } catch {
+        /* Ignore */
       }
-    } catch {
-      void 0
     }
   }
 }
