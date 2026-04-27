@@ -1,90 +1,74 @@
-/**
- * @file Module for AI analysis of documents.
- */
 import { readFileSync } from 'node:fs'
 
 import { CONFIG } from './config.js'
 import { logger } from './logger.js'
 
-function isLocalhost(urlString) {
+function isLocalhost(url) {
   try {
-    const url = new URL(urlString)
-    return ['localhost', '127.0.0.1', '::1'].includes(url.hostname)
+    return ['localhost', '127.0.0.1', '::1'].includes(new URL(url).hostname)
   } catch {
     return false
   }
 }
 
-function constructMessages(text, imagePath, originalName) {
+function constructMessages(pages, originalName, userPrompt) {
   const messages = [
     {
       role: 'system',
-      content: `Jsi archivář. Analyzuj dokument (OCR text + obraz + původní název souboru) a vrať JSON:
-{
-  "company": "Zkrácený název firmy bez právních přípon (např. s.r.o., a.s., Inc., Ltd., GmbH), nebo null",
-  "doc_type": "invoice | receipt | payment | contract | statement | screenshot | other",
-  "title": "Max 6 slov. Nepoužívej datum, měsíc, rok ani časové období — datum je v názvu souboru zvlášť. Pro faktury/paragony: 2 nejdražší položky + 'a N dalších' pokud >2. Bez SKU, sériových čísel, ™ ® ©. Nebo null pokud nelze určit.",
-  "date": "YYYY-MM-DD — datum plnění nebo vystavení, nikoli splatnosti. Rozuměj všem formátům (20.1.2025, 20. ledna 2025, January 20 2025, v Praze dne...). Nebo null pokud datum není v dokumentu."
-}
-
-Závazná pravidla:
-1. NEVYMÝŠLEJ SI: Pokud si nejsi jistý, vrať null.
-2. ZÁKAZ REDUNDANCE: V poli title nesmí být slova jako "Dne", "Roku", "Doklad".
-3. ŽÁDNÝ MARKETING: Ignoruj reklamní slogany a slevy.`,
+      content:
+        'Jsi expertní archivář. Analyzuj strany a vrať JSON: {"company": string, "title": string, "date": "YYYY-MM-DD", "vision_check": string}.\nPravidla:\n1. Title nesmí obsahovat datum ani firmu.\n2. Pokud uživatel pošle dotaz, prioritizuj jeho instrukci.',
     },
     {
       role: 'user',
       content: [
         {
           type: 'text',
-          text: `Původní název: ${originalName}\n\nOCR Text:\n${text}`,
+          text: `Soubor: ${originalName}\n${userPrompt ? 'DOPLŇUJÍCÍ INSTRUKCE: ' + userPrompt + '\n' : ''}\nObsah:`,
         },
       ],
     },
   ]
 
-  if (imagePath) {
-    try {
-      const buffer = readFileSync(imagePath)
-      if (buffer.length <= CONFIG.IMAGE_MAX_BYTES) {
+  for (let index = 0; index < Math.min(pages.length, 3); index += 1) {
+    const page = pages[index]
+    messages[1].content.push({
+      type: 'text',
+      text: `\n[Strana ${index + 1} OCR]:\n${page.text.slice(0, 2000)}`,
+    })
+    if (page.imagePath) {
+      try {
+        const base64 = readFileSync(page.imagePath).toString('base64')
         messages[1].content.push({
           type: 'image_url',
-          image_url: {
-            url: `data:image/jpeg;base64,${buffer.toString('base64')}`,
-          },
+          image_url: { url: `data:image/jpeg;base64,${base64}` },
         })
+      } catch {
+        /* Skip */
       }
-    } catch {
-      void 0
     }
   }
-
   return messages
 }
 
 async function performInference(messages, signal) {
-  logger.debug(
-    `Odesílám dotaz na AI (${messages[1].content[0].text.length} znaků textu)...`
-  )
+  logger.debug('Odesílám dotaz na AI...')
   const response = await fetch(CONFIG.LM_STUDIO_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: CONFIG.MODEL,
       messages,
-      temperature: CONFIG.TEMPERATURE,
+      temperature: 0,
       max_tokens: CONFIG.MAX_TOKENS,
     }),
     signal,
   })
 
   if (!response.ok) {
-    throw new Error(`API vrátilo chybu ${response.status}`)
+    throw new Error(`API Error ${response.status}`)
   }
-
   const data = await response.json()
   const content = data.choices?.[0]?.message?.content
-  logger.debug(`Odpověď AI: "${content?.slice(0, 100)}..."`)
   if (content) {
     const jsonString = content
       .replaceAll('```json', '')
@@ -96,26 +80,24 @@ async function performInference(messages, signal) {
 }
 
 /**
- * Analyses document using LLM.
- * @param {object} params - Analysis parameters.
- * @param {string} params.text - OCR text.
- * @param {string|undefined} params.imagePath - Image path.
- * @param {string} params.originalName - Original name.
- * @returns {Promise<object|undefined>} LLM result.
+ * Analyzes multi-page document data.
+ * @param {object} params - Input parameters.
+ * @param {Array<object>} params.pages - OCR pages with text and images.
+ * @param {string} params.originalName - Original filename for context.
+ * @param {string} [params.userPrompt] - Optional user instruction.
+ * @returns {Promise<object|undefined>} Result object with extracted data.
  */
-export async function analyzeDocument({ text, imagePath, originalName }) {
+export async function analyzeDocument({ pages, originalName, userPrompt }) {
   if (!isLocalhost(CONFIG.LM_STUDIO_URL)) {
-    throw new Error(
-      `Zabezpečení: Adresa AI (${CONFIG.LM_STUDIO_URL}) musí být localhost.`
-    )
+    throw new Error('Security Violation')
   }
-
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), CONFIG.LLM_TIMEOUT_MS)
-
   try {
-    const messages = constructMessages(text, imagePath, originalName)
-    return await performInference(messages, controller.signal)
+    return await performInference(
+      constructMessages(pages, originalName, userPrompt),
+      controller.signal
+    )
   } finally {
     clearTimeout(timeoutId)
   }
