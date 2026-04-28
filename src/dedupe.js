@@ -10,24 +10,23 @@ import { createReadStream } from 'node:fs'
  * @returns {Promise<string>} File hash.
  */
 export async function calculateHash(filePath) {
-  return new Promise((resolve, reject) => {
-    const hash = createHash('sha256')
-    const stream = createReadStream(filePath)
+  if (typeof filePath !== 'string' || filePath.trim() === '') {
+    throw new TypeError('filePath must be a non-empty string')
+  }
 
-    stream.on('data', (chunk) => {
+  const hash = createHash('sha256')
+  const stream = createReadStream(filePath)
+
+  try {
+    for await (const chunk of stream) {
       hash.update(chunk)
+    }
+    return hash.digest('hex')
+  } catch (error) {
+    throw new Error(`Failed to calculate hash for ${filePath}`, {
+      cause: error,
     })
-
-    stream.on('end', () => {
-      resolve(hash.digest('hex'))
-    })
-
-    stream.on('error', (error) => {
-      reject(
-        new Error(`Failed to calculate hash for ${filePath}`, { cause: error })
-      )
-    })
-  })
+  }
 }
 
 /**
@@ -38,6 +37,10 @@ export function createDeduplicator() {
   const seenHashes = new Set()
 
   return function isUnique(hash) {
+    if (typeof hash !== 'string' || hash.trim() === '') {
+      throw new TypeError('hash must be a non-empty string')
+    }
+
     if (seenHashes.has(hash)) {
       return false
     }
