@@ -41,7 +41,8 @@ pnpm start -d docs/*.png      # Multiple files with deduplication
 
 ## How it works
 
-1. **OCR:** Reads text via Apple Vision. Renders first 4 pages of PDF to JPG.
+1. **OCR:** Reads text via Apple Vision for PDF and image files. Renders up to 6
+   PDF pages to JPG.
 2. **Match:** Checks `registry.json5` for known company patterns.
 3. **AI:** Local LLM analyses text and images to find date and company.
 4. **Merge:** Combines data. If data is missing, it shows a macOS dialog box.

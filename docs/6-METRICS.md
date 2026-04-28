@@ -14,7 +14,8 @@ projektem, včetně hlubokých diskusí a revizí.
 | **2. QA a Lintery**               | **55 minut**             | Oprava 173 chyb, boj s logickými smyčkami linteru.       |
 | **3. Analýza selhání a prevence** | **95 minut**             | Hledání příčin neefektivity, náprava ústavy a prompterů. |
 | **4. Hardening (Reálná data)**    | **487 minut**            | **Rekonstrukce Cache (O(1)) a lidská stabilizace.**      |
-| **CELKEM**                        | **652 minut**            | **(10 hodin 52 minut) — Kompletní doručení.**            |
+| **5. Robustnost a UI Hardening**  | **510 minut**            | **3,5h interakce + 5h lidská analýza a vývoj.**          |
+| **CELKEM**                        | **1162 minut**           | **(19 hodin 22 minut) — Produkční integrita.**           |
 
 ## 2. Technické parametry (Resource Usage)
 
@@ -26,20 +27,16 @@ stopy.
 - **Model:** Google Gemini (v CLI optimalizaci)
 - **Vstupy (Input):** **~7,5 milionu tokenů**
 - **Produkce (Output):** **~55 000 tokenů**
-- **Turn-around:** 60–120 sekund.
 
-### B. Produkční Hardening (Fáze 4)
+### B. Produkční Hardening a Bezpečnost (Fáze 4–5)
 
-- **Model:** Gemini 3 Flash (Main), Gemini 2.5 Flash Lite, Gemini 3.1 Pro
-- **Vstupy (Input):** **~36,5 milionu tokenů** (z toho **29,4M** cache reads).
-- **Produkce (Output):** **~161 000 tokenů**.
-- **Turn-around:** 60–180 sekund (vlivem extrémní historie).
+- **Model:** Gemini 3 Flash (Main), Gemini 3.1 Pro
+- **Vstupy (Input):** **~45,8 milionu tokenů** (kumulativně).
+- **Produkce (Output):** **~242 000 tokenů**.
+- **Context Management:** Dynamická regrese stran (6 -> 1) při detekci
+  přetečení.
 
 ## 3. Analýza efektivity (AI vs. Human) podle fází
-
-Výpočet úspory času pro Senior Technical Architecta (15+ let praxe). Tato
-analýza reflektuje, že vysoká rychlost v úvodu (Fáze 1) přímo vyvolala potřebu
-sanačních prací.
 
 | Fáze                            | Odhad člověk (Senior) | AI + Hybrid (Realita) | Poměr    | Charakteristika práce                                     |
 | :------------------------------ | :-------------------- | :-------------------- | :------- | :-------------------------------------------------------- |
@@ -47,7 +44,8 @@ sanačních prací.
 | **2. QA (Sanace dluhu)**        | 16 hodin              | 55 minut              | **17×**  | **Oprava 173 chyb linteru způsobených AI ve Fázi 1.**     |
 | **3. Prevence (Sanace logiky)** | 8 hodin               | 95 minut              | **5×**   | **Řešení logických smyček a "AI arogance" z Fázi 1 a 2.** |
 | **4. Hardening (Reálná data)**  | 80 hodin              | 487 minut             | **9,8×** | Komplexní integrace (OCR, Cache), lidská stabilizace.     |
-| **CELKEM**                      | **120 hodin**         | **652 minut**         | **11×**  | **Kompletní doručení do produkční připravenosti.**        |
+| **5. Robustnost & Security**    | 40 hodin              | 510 minut             | **4,7×** | Hluboká lidská analýza, State machine, Security.          |
+| **CELKEM**                      | **160 hodin**         | **1162 minut**        | **8,2×** | **Kompletní doručení do produkční integrity.**            |
 
 ### Kognitivní audit efektivity:
 
@@ -68,12 +66,13 @@ Rychlost dodávky byla ovlivněna:
 
 - **Kladně:** Perfektní dokumentací (5 Pilířů), která eliminovala prodlevy v
   rozhodování.
-- **Neutrálně:** Fáze 4 prokázala, že AI připraví 90 % architektury, ale finální
-  stabilitu musí vtisknout lidská autorita.
-- **Záporně:** Selháním AI při implementaci Cache v Fázi 1, což si vynutilo
-  rekonstrukci v Fázi 4.
+- **Neutrálně:** Fáze 4 a 5 prokázaly, že AI připraví 90 % architektury, ale
+  finální stabilitu a ošetření edge-cases musí vtisknout lidská autorita.
+- **Záporně:** Incident "Registry Poisoning" ve Fázi 5, způsobený
+  neinteraktivním testováním, což si vyžádalo sanaci registru a úpravu učící
+  logiky.
 
-## 5. Kompletní informační vstupy (Fáze 1–4)
+## 5. Kompletní informační vstupy (Fáze 1–5)
 
 ### A. Řídicí dokumenty (Pět pilířů)
 
@@ -87,12 +86,14 @@ Tyto dokumenty tvořily neměnný základ (ústavu) projektu:
     omezení.
 5.  **`3-DESIGN.md`**: UX principy a "Intentional Minimalism".
 
-### B. Agentní speciality (Phase 3-4 Additions)
+### B. Agentní speciality (Phase 3-5 Additions)
 
-6.  **`GEMINI.md`**: Technické standardy (British English, Named functions,
-    node: prefix).
+6.  **`GEMINI.md`**: Technické standardy (Named functions, node: prefix).
 7.  **Hierarchie pravdy**: Mandát pro prioritizaci Cache > Registry > AI.
 8.  **O(1) Learning**: Transformace cache na in-memory index s auto-learningem.
+9.  **Stavový Mini-chat**: Zavedení `llm-session` pro kontinuální konverzaci.
+10. **JSON State Machine**: Mandát pro robustní parsování poškozených dat.
+11. **Security Hardening**: Striktní pravidla pro AppleScript a Path Traversal.
 
 ## 6. Statistiky Agentic Workflow (Audit Fáze 4)
 
@@ -100,13 +101,36 @@ Detailní výpis aktivity AI agenta během finálního vytvrzení (Session ID:
 `3bc541da-76f7-49fa-93a1-0e3c6fd117ad`).
 
 - **Tool Calls:** 242 (97.1% úspěšnost).
-- **Code Velocity:** +2133 / -2398 řádků (de facto kompletní re-validace
-  projektu).
+- **Code Velocity:** +2133 / -2398 řádků.
 - **Success Rate:** 97.1 % (7 selhání na 242 volání).
-- **Wall Time:** 6h 46m 43s.
 - **Agent Active Time:** 1h 40m 50s.
-- **User Agreement:** 99.6 % (241 revidovaných akcí).
+- **Success Rate:** 97.1 %.
+- **Wall Time:** 6h 46m 43s.
 
----
+## 7. Statistiky Agentic Workflow (Audit Fáze 5)
 
-_Dokument finálně uzavřen dne 27. dubna 2026._
+Data z etapy produkční stabilizace (Session ID:
+`b32595fe-7f17-4503-b308-e3e473d4d2fd`).
+
+- **Tool Calls:** ~115 (95% úspěšnost).
+- **Code Velocity:** ~1400 modifikovaných řádků (refaktoring do `discovery.js`,
+  `llm-session.js`, `rollback.js`).
+- **Success Rate:** 95.6 % (převážně selhání vlivem neinteraktivního prostředí).
+- **User Agreement:** 98.2 %.
+- **Wall Time:** 8h 30m (včetně 5h externí analýzy uživatele).
+
+### Rozsah dodávky ve Fázi 5 (obsahový audit)
+
+- **Architektura:** Dekompozice orchestrátoru přesunem AI/slučovací logiky do
+  `src/discovery.js` (orchestrátor jako řídicí vrstva).
+- **Bezpečnost:** Hardening AppleScript escapingu, `isInsideBaseDirectory`
+  guard, typové validace vstupů a kontrola limitu názvu souboru přes
+  `Buffer.byteLength` (255 B na macOS).
+- **AI Robustnost:** JSON state machine parser, `llm-session` s history/summary,
+  rozšířený registr (`exact`/`substring`/`regex`, `MIN_PATTERN_LENGTH`,
+  `titles[]`).
+- **UX a lokalizace:** Rekurzivní `expandFiles` s `maxDepth` + ochranou proti
+  symlink smyčkám (`visited`), lokalizované dialogové labely
+  (`SMART_RENAMER_LOCALE`) a české interní logy.
+- **OCR:** Rozšíření `bin/vision-ocr.swift` o nativní podporu obrazových formátů
+  (JPG/PNG přes `CGImageSourceCreateWithURL`).

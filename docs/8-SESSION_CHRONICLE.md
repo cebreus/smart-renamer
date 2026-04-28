@@ -48,18 +48,54 @@ definoval nové standardy práce s AI agenty.
 - **Výsledek:** Transformace z naivního skriptu v učící se organismus s
   "Hierarchií pravdy".
 
-## 5. Klíčové inženýrské milníky
+## 5. Fáze 5: Produkční stabilizace a konverzační inteligence (27. 4. 2026)
+
+- **Časový rámec:** 510 minut (3,5h interakce + 5h lidská analýza a vývoj).
+- **Stav:** Projekt je funkční, ale vykazuje křehkost v UI a při parsování
+  nestandardních odpovědí.
+- **Děj:**
+  - **Registry Poisoning:** Identifikován kritický problém, kdy neinteraktivní
+    testování "otrávilo" registr nesmyslnými pravidly. Provedena manuální sanace
+    a nasazení pojistky `MIN_PATTERN_LENGTH`.
+  - **Discovery Refactor:** Sloučení návrhů a AI rozhodování přesunuto z
+    orchestrátoru do `src/discovery.js`; orchestrátor zjednodušen na řídicí tok.
+  - **UI Revolution:** Přechod na **Emoji Dashboard** s rozdělením 📅/🏢/📝.
+    Implementace číselných zkratek (1-9) pro bleskovou editaci.
+  - **Folder Batch Engine:** Nasazen rekurzivní `expandFiles` s `maxDepth` a
+    ochranou proti symlink smyčkám (`visited`).
+  - **Localization Layer:** Dialogy získaly locale-aware popisky
+    (`SMART_RENAMER_LOCALE`) s mapováním na kanonické akce (Skip/Cancel);
+    interní logy sjednoceny do češtiny.
+  - **Security Hardening:** Nasazení obrany proti AppleScript Injection a Path
+    Traversal.
+  - **Filename Limit Guard:** Přidána kontrola délky názvu přes
+    `Buffer.byteLength` (255 B na macOS).
+  - **JSON State Machine:** Nasazen stavový parser JSON bloků odolný vůči
+    ořezaným/zašuměným odpovědím.
+  - **Date Prioritization:** Implementováno bodování kandidátů data (ISO >
+    tečkované formáty, 4-místný rok > 2-místný).
+  - **Dynamic Context:** Implementována **regrese stran (6 -> 1)**. Pokud AI
+    přeteče, systém automaticky ubere stranu a pokus zopakuje.
+  - **AI Memory:** Zavedení `llm-session` s historií a sumarizací pro
+    kontinuální dialog v rámci jednoho souboru.
+  - **Vision OCR Upgrade:** `bin/vision-ocr.swift` rozšířen o nativní detekci
+    obrazových formátů (JPG/PNG) přes `CGImageSourceCreateWithURL`.
+- **Výsledek:** Stabilní, bezpečný a lokalizovaný systém připravený na batch
+  zpracování stovek dokumentů.
+
+## 6. Klíčové inženýrské milníky
 
 1.  **Linter Supremacy:** Technické limity (`AI_GUARDRAILS`) jsou absolutní.
 2.  **Chain of Truth:** Cache (Fakta) > Registry (Pravidla) > AI (Odhady).
 3.  **Human-AI Synergy:** AI staví lešení a hrubou stavbu (90 %), člověk
     vtiskuje stabilitu a "duši" (10 %).
 
-## 6. Technické resumé Fáze 4
+## 7. Technické resumé (Kumulativní)
 
-- **Tool Efficiency:** 235 úspěšných operací z 242 (97.1 %).
-- **Code Velocity:** +2133 / -2398 řádků (souhrnná změna přes 4500 řádků).
-- **Session ID:** `3bc541da-76f7-49fa-93a1-0e3c6fd117ad`.
+- **Celkový čas:** 19h 22m.
+- **Inženýrský poměr:** 8,2:1 (AI vs. Human).
+- **Integrita:** 0 chyb linteru, 100% Type Safety na vstupu.
+- **O(1) Learning:** Systém se učí z každého manuálního zásahu uživatele.
 
 ---
 

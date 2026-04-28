@@ -189,6 +189,131 @@ zásah efektivnější než "prompterství".
 - **Efektivita kontextu:** Session využila přes **28M cache reads**, což pomohlo
   udržet konzistenci při rozsáhlém refaktoringu.
 
+## 7. Fáze 5: UX, Bezpečnost a Stavová AI
+
+Závěrečná fáze vytvrzení se soustředila na eliminaci "poslední míle" rizik a
+přechod od skriptu k robustní aplikaci.
+
+### 7.1 Truth over Guesswork (Integrita dat)
+
+Zkušenost s vícestránkovými dokumenty ukázala, že LLM má tendenci halucinovat
+data i z nečitelného OCR, aby "vyhověla" promptu.
+
+- **Kognitivní posun:** AI nyní funguje jako **striktní revizor**. Mandát zní:
+  "Pokud dokument není čitelný, nehádej a varuj uživatele". Zavedení pole
+  `vision_check` jako primárního komunikačního kanálu (AI Feedback) změnilo
+  vztah k uživateli na partnerský dialog.
+
+### 7.2 Defenzivní parsování (JSON State Machine)
+
+Regexy a `indexOf` se ukázaly jako křehké při ořezaných AI odpovědích nebo
+nestandardních formátech (např. pole objektů).
+
+- **Inženýrské řešení:** Implementace **vlastního stavového automatu** pro
+  extrakci JSONu. Parser nyní sleduje hloubku vnoření, ignoruje uvozovky a
+  spolehlivě najde validní objekt i v moři okolního textu. To vyřešilo chyby
+  `Unterminated string`.
+
+### 7.3 Bezpečnostní mandát a Hardening
+
+S přechodem na zpracování celých složek vyvstalo riziko injekcí přes názvy
+souborů.
+
+- **Hardening:**
+  - **AppleScript Escaping:** Rozšíření sanitizace o uvozovky, `\t`, `\n`, `\r`
+    a lomítka.
+  - **Path Traversal Protection:** Funkce `isInsideBaseDirectory` hlídá, aby
+    přejmenování nemohlo uniknout z cílové složky.
+  - **Filename Byte Guard (macOS):** Kontrola délky názvu přes
+    `Buffer.byteLength` s limitem 255 B.
+  - **Type Safety:** Plošné nasazení typových kontrol na vstupy klíčových
+    funkcí.
+
+### 7.4 UI Dashboard a Kognitivní zátěž
+
+Původní lineární seznam návrhů byl nepřehledný.
+
+- **UX Design:** Rozdělení na kategorizovaný dashboard: 📅 (Datum) | 🏢 (Firma)
+  | 📝 (Popis).
+- **Zkratky (n):** Zavedení číselných zkratek `(1)-(9)` umožnilo bleskovou
+  korekci polí bez nutnosti psaní, což je klíčové pro batch zpracování desítek
+  souborů.
+
+### 7.4.1 Rekurzivní batch a lokalizace UI
+
+S přechodem z jednotlivých souborů na celé složky a reálné nasazení v různých
+jazykových prostředích se rozšířil rozsah UI orchestrace.
+
+- **Rekurzivní discovery:** `expandFiles` prochází složky do `maxDepth` a brání
+  nekonečným smyčkám přes symlinky (`visited = new Set()`).
+- **Lokalizace dialogů:** `DIALOG_LABELS_BY_LOCALE` přepíná popisky podle
+  `SMART_RENAMER_LOCALE` a mapuje je na kanonická tlačítka (`SKIP`, `CANCEL`).
+- **Lokalizace interních logů:** Diagnostické výstupy loggeru byly sjednoceny do
+  české terminologie.
+
+### 7.5 Algoritmická prioritizace dat (Heuristika)
+
+Zatímco AI odhaduje datum sémanticky, systém implementuje vlastní validátor v
+`src/utilities.js`, který boduje kandidáty extrahované přes Regex.
+
+- **Prioritní schéma:**
+  1.  **ISO formát (YYYY-MM-DD):** Nejvyšší váha (jednoznačnost).
+  2.  **Délka roku:** 4-místný rok má přednost před 2-místným (prevence chyb u
+      dat z 20. století).
+  3.  **Pozice v textu:** Při shodě bodování vítězí dříve nalezený výskyt.
+- **Entity Selection:** U vícestránkových dokumentů AI aktivně porovnává všechna
+  nalezená data s **aktuálním systémovým časem** a prioritizuje entitu nejbližší
+  dnešku (vhodné pro vstupenky/akce).
+
+### 7.6 Architektura AI Session (Stavový Mini-Chat)
+
+Pro zachování kontinuity během `/ai` dotazů v rámci jednoho souboru byl vytvořen
+modul `src/llm-session.js`.
+
+- **History vs. Summary:** Systém udržuje `history` (přesné záznamy posledních
+  kroků). Při překročení `AI_SESSION_MAX_TURNS` (5 kol) dojde k automatické
+  kompresi starších kroků do textového `summary`.
+- **Důsledek:** AI neztrácí kontext ani po desáté opravě, zatímco kontextové
+  okno zůstává štíhlé a neprodražuje inferenci.
+
+### 7.7 Rozšířený Registr a Match Modes
+
+Transformace registru z prostého vyhledávání textu na výkonný srovnávač.
+
+- **MatchModes:** Podpora pro `substring` (výchozí), `exact` (přesná shoda) a
+  `regex` (plnohodnotné regulární výrazy s `safe-regex` kontrolou).
+- **Multi-title support:** Možnost definovat pole `titles` pro jeden pattern,
+  což umožňuje systému nabízet uživateli více relevantních možností popisu pro
+  danou firmu.
+
+### 7.8 Batch Rollback (Undo Engine)
+
+Implementace `--undo` mechanismu v `src/rollback.js` staví na atomicitě
+transakčních logů.
+
+- **Logika:** Čtení logu v reverzním pořadí (`toReversed()`), extrakce dvojic
+  `original_abs` / `final_abs` a bezpečné přejmenování zpět s kontrolou kolizí
+  (Path Traversal Guard).
+
+### 7.9 Modularizace orchestrace (Discovery Engine)
+
+Původní návrhové slučování a AI inferenční logika byly v jedné vrstvě
+orchestrátoru.
+
+- **Refaktor:** Přesun slučování návrhů a AI discovery toku do
+  `src/discovery.js`.
+- **Důsledek:** `src/orchestrator.js` funguje jako čistá řídicí vrstva, což
+  snižuje kognitivní zátěž při debugování a testování.
+
+### 7.10 Rozšíření OCR na obrazové formáty
+
+OCR pipeline už není omezena jen na PDF.
+
+- **Swift integrace:** V `bin/vision-ocr.swift` byla doplněna nativní detekce
+  obrazových vstupů přes `CGImageSourceCreateWithURL`.
+- **Praktický dopad:** Vision OCR nyní zpracovává i běžné JPG/PNG skeny bez
+  nutnosti mezikroků.
+
 ---
 
-_Analýza chatu a kognitivní audit (včetně Fáze 4) uzavřen 27. dubna 2026._
+_Analýza chatu a kognitivní audit (včetně Fáze 5) uzavřen 27. dubna 2026._
