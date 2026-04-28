@@ -1,9 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "entry": ["index.js"],
   "project": ["**/*.js"],
   "ignoreExportsUsedInFile": true,
-  "ignore": ["review-copilot.js", "src/ui.js"],
   "ignoreDependencies": ["remark-lint-thematic-break-marker"],
   "ignoreBinaries": ["coderabbit"]
 }
