@@ -22,6 +22,7 @@ export const CONFIG = {
 
   REGISTRY_FILE: path.join(ROOT_DIR, 'registry.json5'),
   LOG_FILE: path.join(ROOT_DIR, 'smart-renamer.log'),
+  TRACE_LOG_FILE: path.join(ROOT_DIR, 'smart-renamer.trace.log'),
 
   DRY_RUN: process.env.DRY_RUN === 'true',
   FORCE: process.env.FORCE === 'true',
