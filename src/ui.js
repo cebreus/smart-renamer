@@ -4,6 +4,66 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 
+import { logger } from './logger.js'
+
+/**
+ * Escapes text for safe use in AppleScript strings.
+ * @param {string} value - Input text.
+ * @returns {string} Escaped text safe for AppleScript.
+ */
+function escapeAppleScriptString(value) {
+  return value
+    .replaceAll('\\', String.raw`\\`)
+    .replaceAll('"', String.raw`\"`)
+    .replaceAll('\r', String.raw`\r`)
+    .replaceAll('\n', String.raw`\n`)
+    .replaceAll('\t', String.raw`\t`)
+}
+
+const DIALOG_LABELS_BY_LOCALE = {
+  cs: { cancel: 'Zrušit', skip: 'Přeskočit', ok: 'OK' },
+  en: { cancel: 'Cancel', skip: 'Skip', ok: 'OK' },
+}
+
+const DIALOG_BUTTONS = {
+  CANCEL: 'CANCEL',
+  OK: 'OK',
+  SKIP: 'SKIP',
+}
+
+function getDialogLabels() {
+  const locale = (process.env.SMART_RENAMER_LOCALE || 'cs').toLowerCase()
+  const shortLocale = locale.split('-')[0]
+  return DIALOG_LABELS_BY_LOCALE[shortLocale] || DIALOG_LABELS_BY_LOCALE.cs
+}
+
+function mapButtonToCanonical(button, labels) {
+  if (button === labels.ok) return DIALOG_BUTTONS.OK
+  if (button === labels.skip) return DIALOG_BUTTONS.SKIP
+  if (button === labels.cancel) return DIALOG_BUTTONS.CANCEL
+  return undefined
+}
+
+function parseDialogOutput(processResult, labels) {
+  const buttonMatch = processResult.stdout.match(/button returned:(.*?),/)
+  const txtMatch = processResult.stdout.match(/text returned:(.*)$/s)
+
+  if (!buttonMatch || !txtMatch) {
+    logger.error(
+      `Nečekaný výstup AppleScriptu při zpracování výsledku (stav: ${processResult.status})`
+    )
+    throw new Error('Invalid response from dialog')
+  }
+
+  const button = mapButtonToCanonical(buttonMatch[1].trim(), labels)
+  if (!button) {
+    logger.error(`Neznámé tlačítko z AppleScriptu: ${buttonMatch[1].trim()}`)
+    throw new Error('Unknown dialog button')
+  }
+
+  return { button, text: txtMatch[1].trim() }
+}
+
 /**
  * Opens file preview in macOS Preview.
  * @param {string} filePath - File path.
@@ -11,9 +71,9 @@ import { existsSync } from 'node:fs'
  */
 export function openPreview(filePath) {
   if (existsSync(filePath)) {
-    const process = spawnSync('/usr/bin/open', [filePath])
-    if (process.error) {
-      void 0
+    const processResult = spawnSync('/usr/bin/open', [filePath])
+    if (processResult.error) {
+      /* Ignore error */
     }
   }
 }
@@ -24,58 +84,44 @@ export function openPreview(filePath) {
  * @returns {void}
  */
 export function closePreview(fileName) {
-  const script = `tell application "Preview" to close (every window whose name contains "${fileName}")`
+  const escapedName = escapeAppleScriptString(fileName)
+  const script = `tell application "Preview" to close (every window whose name contains "${escapedName}")`
   const osascriptPath = '/usr/bin/osascript'
   const actualPath = existsSync(osascriptPath) ? osascriptPath : 'osascript'
-  const process = spawnSync(actualPath, ['-e', script], { encoding: 'utf8' })
-  if (process.error) {
-    void 0
+  const processResult = spawnSync(actualPath, ['-e', script], {
+    encoding: 'utf8',
+  })
+  if (processResult.error) {
+    /* Silent skip */
   }
 }
 
 /**
- * Shows native input dialog.
+ * Shows native input dialog with 3 buttons.
  * @param {string} promptText - Prompt text.
  * @param {string} [defaultValue] - Default value.
- * @returns {string|undefined} Answer or undefined.
+ * @returns {object|undefined} { text: string, button: string } or undefined.
  */
 export function showInputDialog(promptText, defaultValue = '') {
-  const escapedPrompt = promptText.replaceAll('"', String.raw`\"`)
-  const escapedDefault = defaultValue.replaceAll('"', String.raw`\"`)
+  const escapedPrompt = escapeAppleScriptString(promptText)
+  const escapedDefault = escapeAppleScriptString(defaultValue)
+  const labels = getDialogLabels()
+  const localizedCancel = escapeAppleScriptString(labels.cancel)
+  const localizedSkip = escapeAppleScriptString(labels.skip)
+  const localizedOk = escapeAppleScriptString(labels.ok)
 
-  const script = String.raw`display dialog "${escapedPrompt}" default answer "${escapedDefault}" with icon note buttons {"Zrušit", "OK"} default button "OK"`
-
-  const osascriptPath = '/usr/bin/osascript'
-  const actualPath = existsSync(osascriptPath) ? osascriptPath : 'osascript'
-  const process = spawnSync(actualPath, ['-e', script], { encoding: 'utf8' })
-
-  if (process.status === 0) {
-    const match = process.stdout.match(/text returned:(.*)$/s)
-    if (match) {
-      return match[1].trim()
-    }
-  }
-  return undefined
-}
-
-/**
- * Shows native confirm dialog.
- * @param {string} promptText - Prompt text.
- * @returns {boolean} Confirm result.
- */
-export function showConfirmDialog(promptText) {
-  const escapedPrompt = promptText.replaceAll('"', String.raw`\"`)
-  const script = String.raw`display dialog "${escapedPrompt}" with icon caution buttons {"Ne", "Ano"} default button "Ano"`
+  const script = String.raw`display dialog "${escapedPrompt}" default answer "${escapedDefault}" with icon note buttons {"${localizedCancel}", "${localizedSkip}", "${localizedOk}"} default button "${localizedOk}" cancel button "${localizedCancel}"`
 
   const osascriptPath = '/usr/bin/osascript'
   const actualPath = existsSync(osascriptPath) ? osascriptPath : 'osascript'
-  const process = spawnSync(actualPath, ['-e', script], { encoding: 'utf8' })
+  const processResult = spawnSync(actualPath, ['-e', script], {
+    encoding: 'utf8',
+  })
 
-  if (process.status !== 0) {
-    return false
+  if (processResult.status === 0) {
+    return parseDialogOutput(processResult, labels)
   }
-
-  return process.stdout.includes('button returned:Ano')
+  return undefined // Cancelled
 }
 
 /**
@@ -84,11 +130,14 @@ export function showConfirmDialog(promptText) {
  * @returns {string} Sanitised string.
  */
 export function sanitizeUserInput(input) {
-  if (!input) return ''
+  if (typeof input !== 'string') {
+    throw new TypeError('input must be a string')
+  }
+  if (input.trim() === '') return ''
 
   return input
     .trim()
-    .slice(0, 50)
+    .slice(0, 200)
     .replaceAll(/[:/\\|"*?<>]/g, '')
     .replaceAll(/\s+/g, ' ')
 }
