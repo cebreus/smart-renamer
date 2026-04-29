@@ -105,7 +105,10 @@ function expandFiles(paths, maxDepth = 100, visited = new Set()) {
   return files
 }
 
-async function handleFile(file, { deduplicator, force, dryRun }) {
+async function handleFile(
+  file,
+  { deduplicator, force, dryRun, fileIndex, totalFiles }
+) {
   if (shuttingDown) {
     logger.warn(`Skipping file during shutdown: ${path.basename(file)}`)
     return
@@ -121,17 +124,25 @@ async function handleFile(file, { deduplicator, force, dryRun }) {
     }
   }
 
-  await processFile(absPath, { force, dryRun })
+  await processFile(absPath, { force, dryRun, fileIndex, totalFiles })
 }
 
 async function processFilesLoop(expanded, { deduplicator, force, dryRun }) {
   let hasErrors = false
-  for (const file of expanded) {
+  const totalFiles = expanded.length
+  for (let index = 0; index < totalFiles; index += 1) {
+    const file = expanded[index]
     if (shuttingDown) break
     setOperationId(randomUUID())
     activeFileOperations += 1
     try {
-      await handleFile(file, { deduplicator, force, dryRun })
+      await handleFile(file, {
+        deduplicator,
+        force,
+        dryRun,
+        fileIndex: index + 1,
+        totalFiles,
+      })
     } catch (error) {
       const message =
         error instanceof Error && error.message ? error.message : String(error)

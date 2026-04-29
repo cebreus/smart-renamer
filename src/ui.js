@@ -8,15 +8,6 @@ import { existsSync } from 'node:fs'
 import { logger } from './logger.js'
 import { ensureString } from './utilities.js'
 
-function escapeAppleScriptString(value) {
-  return value
-    .replaceAll('\\', String.raw`\\`)
-    .replaceAll('"', String.raw`\"`)
-    .replaceAll('\r', String.raw`\r`)
-    .replaceAll('\n', String.raw`\n`)
-    .replaceAll('\t', String.raw`\t`)
-}
-
 const DIALOG_LABELS_BY_LOCALE = {
   cs: { cancel: 'Zrušit', skip: 'Přeskočit', ok: 'OK' },
   en: { cancel: 'Cancel', skip: 'Skip', ok: 'OK' },
@@ -26,6 +17,15 @@ const DIALOG_BUTTONS = {
   CANCEL: 'CANCEL',
   OK: 'OK',
   SKIP: 'SKIP',
+}
+
+function escapeAppleScriptString(value) {
+  return value
+    .replaceAll('\\', String.raw`\\`)
+    .replaceAll('"', String.raw`\"`)
+    .replaceAll('\r', String.raw`\r`)
+    .replaceAll('\n', String.raw`\n`)
+    .replaceAll('\t', String.raw`\t`)
 }
 
 function getDialogLabels() {
@@ -137,10 +137,42 @@ export function showInputDialog(promptText, defaultValue = '') {
 export function sanitizeUserInput(input) {
   ensureString(input, 'input')
   if (input.trim() === '') return ''
-
   return input
     .trim()
     .slice(0, 200)
     .replaceAll(/[:/\\|"*?<>]/g, '')
     .replaceAll(/\s+/g, ' ')
+}
+
+/**
+ * Formats AI feedback text with icons.
+ * @param {string} visionCheck - AI vision check text.
+ * @returns {string} Formatted text.
+ */
+export function formatAiFeedback(visionCheck) {
+  ensureString(visionCheck, 'visionCheck')
+  if (!visionCheck || visionCheck.trim() === '') return ''
+  const lower = visionCheck.toLowerCase()
+  const isWarning =
+    lower.includes('nečitelný') ||
+    lower.includes('garbled') ||
+    /čitelnost:\s*[0-5]/i.test(lower)
+  const icon = isWarning ? '⚠️ VAROVÁNÍ AI' : '🤖 AI'
+  return `${icon}: ${visionCheck}\n\n`
+}
+
+/**
+ * Formats discovery method with icon.
+ * @param {string} method - Discovery method.
+ * @returns {string} Formatted method string.
+ */
+export function formatMethod(method) {
+  const map = {
+    ai: '🤖 Metoda: ai',
+    registry: '📜 Metoda: registr',
+    cache: '💾 Metoda: paměť',
+    manual: '⌨️ Metoda: manuálně',
+  }
+  if (method === null || method === undefined) return 'Metoda: neznámá'
+  return map[method] || `Metoda: ${method}`
 }

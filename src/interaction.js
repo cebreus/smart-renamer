@@ -5,102 +5,23 @@
 import path from 'node:path'
 
 import { CONFIG } from './config.js'
+import {
+  applyCategorizedSelection,
+  buildDashboard,
+  buildProposedName,
+  getCategorizedSuggestions,
+} from './interaction-helpers.js'
 import { logger } from './logger.js'
-import { assembleFilename, getMtimeDate, parseProposedName } from './rename.js'
+import { parseProposedName } from './rename.js'
 import {
   closePreview,
+  formatAiFeedback,
+  formatMethod,
   openPreview,
   sanitizeUserInput,
   showInputDialog,
 } from './ui.js'
 import { ensureObject } from './utilities.js'
-
-/**
- * Builds proposed filename for the dialog.
- * @param {object} current - Current discovery state.
- * @param {string} current.date - Current date.
- * @param {string} current.company - Current company.
- * @param {string} current.title - Current title.
- * @param {string} absPath - Absolute file path.
- * @returns {string} Proposed filename.
- */
-export function buildProposedName(current, absPath) {
-  let isMtime = false
-  let currentDate = current.date
-  if (!currentDate) {
-    currentDate = getMtimeDate(absPath)
-    isMtime = true
-  }
-
-  return assembleFilename({
-    date: currentDate,
-    company: current.company,
-    title: current.title,
-    extension: '',
-    isMtime,
-  }).trim()
-}
-
-function filterCurrent(list, current) {
-  const normalizedCurrent = (current || '').toLowerCase().trim()
-  return (list || []).filter(
-    (item) => item.toLowerCase().trim() !== normalizedCurrent
-  )
-}
-
-function getCategorizedSuggestions(current) {
-  return {
-    dates: filterCurrent(current.date_suggestions, current.date).slice(0, 3),
-    companies: filterCurrent(
-      current.company_suggestions,
-      current.company
-    ).slice(0, 3),
-    titles: filterCurrent(current.title_suggestions, current.title).slice(0, 3),
-  }
-}
-
-function formatRow(emoji, items, startNumber) {
-  if (items.length === 0) return ''
-  const formatted = items
-    .map((item, index) => `(${startNumber + index}) ${item}`)
-    .join('  |  ')
-  return `\n${emoji}  ${formatted}`
-}
-
-function buildDashboard(suggestions) {
-  const dates = formatRow('📅', suggestions.dates, 1)
-  const companies = formatRow('🏢', suggestions.companies, 4)
-  const titles = formatRow('📝', suggestions.titles, 7)
-  return `${dates}${companies}${titles}`
-}
-
-function applyCategorizedSelection(userInput, suggestions, current) {
-  const digits = [...userInput.trim()]
-  if (digits.length === 0 || !digits.every((d) => /^[1-9]$/.test(d))) {
-    return false
-  }
-
-  const ranges = [
-    { start: 1, end: 3, key: 'date', values: suggestions.dates },
-    { start: 4, end: 6, key: 'company', values: suggestions.companies },
-    { start: 7, end: 9, key: 'title', values: suggestions.titles },
-  ]
-
-  for (const digit of digits) {
-    const index = Number.parseInt(digit, 10)
-    const selected = ranges.find(
-      (range) => index >= range.start && index <= range.end
-    )
-    if (selected) {
-      const offset = index - selected.start
-      const value = selected.values[offset]
-      if (value) {
-        current[selected.key] = value
-      }
-    }
-  }
-  return true
-}
 
 async function handleAiPrompt(userInput, context) {
   const nextResult = await context.runDiscovery({
@@ -115,58 +36,61 @@ async function handleAiPrompt(userInput, context) {
   return context.current
 }
 
+function handleSmartInput(input, context) {
+  const { updatedText, hasShortcuts, newCurrent } = applyCategorizedSelection(
+    input,
+    context.suggestions,
+    context.current
+  )
+
+  if (hasShortcuts) {
+    context.current = newCurrent
+    return updatedText === ''
+      ? { type: 'shortcut' }
+      : { type: 'manual', text: updatedText }
+  }
+
+  return { type: 'manual', text: input }
+}
+
 function processAction(result, context) {
   if (result === undefined) throw new Error('Operace zrušena (Zrušit/Escape)')
-  if (result.button === 'SKIP' || result.button === 'CANCEL') {
-    return { type: 'skip' }
-  }
-
-  const input = result.text.trim()
+  const { button, text } = result
+  const input = text.trim()
   const lowerInput = input.toLowerCase()
 
-  if (result.button === 'OK' && (lowerInput === '/ok' || lowerInput === '')) {
+  if (button === 'SKIP' || button === 'CANCEL' || lowerInput === '/skip') {
+    return { type: 'skip' }
+  }
+  if (button === 'OK' && (lowerInput === '/ok' || lowerInput === '')) {
     return { type: 'done' }
   }
-  if (lowerInput === '/skip') return { type: 'skip' }
   if (lowerInput.startsWith('/ai ')) return { type: 'ai_prompt' }
 
-  if (applyCategorizedSelection(input, context.suggestions, context.current)) {
-    return { type: 'shortcut' }
-  }
-  return { type: 'manual' }
+  return handleSmartInput(input, context)
 }
 
-function formatAiFeedback(visionCheck) {
-  if (!visionCheck) return ''
-  const lower = visionCheck.toLowerCase()
-  const isWarning =
-    lower.includes('nečitelný') ||
-    lower.includes('garbled') ||
-    lower.includes('čitelnost: [0-5]') // This literal marks an unfilled template value.
-  const icon = isWarning ? '⚠️ VAROVÁNÍ AI' : '🤖 AI'
-  return `${icon}: ${visionCheck}\n\n`
+function formatPrompt(parameters) {
+  const { current, fileName, dashboard, pageStats, batchStats } = parameters
+  const header = formatAiFeedback(current.vision_check)
+  const method = formatMethod(current.method)
+  const batchInfo = batchStats ? `[${batchStats}] ` : ''
+  const legend = '\n\n💡 Příkazy: /1-9 (výběr), /ai (nápověda), /ok, /skip'
+  return `${header}📄 ${batchInfo}${pageStats}  |  Soubor: ${fileName}\n${method}${dashboard}\n\nUpravte název (Enter pro OK, tlačítko pro přeskočení):${legend}`
 }
 
-function formatMethod(method) {
-  const map = {
-    ai: '🤖 Metoda: ai',
-    registry: '📜 Metoda: registr',
-    cache: '💾 Metoda: paměť',
-    manual: '⌨️ Metoda: manuálně',
-  }
-  return map[method] || `Metoda: ${method}`
-}
-
-function formatPrompt(state, fileName, dashboard, pageStats) {
-  const header = formatAiFeedback(state.current.vision_check)
-  const method = formatMethod(state.current.method)
-  return `${header}📄 ${pageStats}  |  Soubor: ${fileName}\n${method}${dashboard}\n\nUpravte název (Enter pro OK, tlačítko pro přeskočení):`
-}
-
-function getDialogAction(current, fileName, pageStats, absPath) {
+function getDialogAction(parameters) {
+  const { current, fileName, pageStats, absPath, batchStats } = parameters
   const suggestions = getCategorizedSuggestions(current)
+  const prompt = formatPrompt({
+    current,
+    fileName,
+    dashboard: buildDashboard(suggestions),
+    pageStats,
+    batchStats,
+  })
   const dialogResult = showInputDialog(
-    formatPrompt({ current }, fileName, buildDashboard(suggestions), pageStats),
+    prompt,
     buildProposedName(current, absPath)
   )
   const action = processAction(dialogResult, { suggestions, current })
@@ -204,35 +128,45 @@ function assertWithinInteractionLimit(iterations) {
 }
 
 function buildFinalResult(action, dialogResult, current) {
-  const final =
-    action.type === 'done'
-      ? current
-      : {
-          ...current,
-          ...parseProposedName(sanitizeUserInput(dialogResult.text)),
-        }
-  return {
-    company:
-      final.company || current.company || sanitizeUserInput(dialogResult.text),
-    discovery: { ...current, ...final },
+  if (action.type === 'done') {
+    return { company: current.company || 'null', discovery: current }
   }
+
+  const rawInput = action.text || dialogResult.text
+  const sanitizedInput = sanitizeUserInput(rawInput)
+  const parsed = parseProposedName(sanitizedInput)
+
+  const final = {
+    ...current,
+    date: parsed.date || current.date,
+    company: parsed.company || current.company,
+    title: parsed.title || current.title,
+  }
+
+  return { company: final.company || 'null', discovery: final }
 }
 
 async function handleIterativeLoop(parameters, state) {
-  const { absPath, discovery, pages } = parameters
+  const { absPath, discovery, pages, fileIndex, totalFiles } = parameters
   const fileName = path.basename(absPath)
   const safePagesLength = pages?.length ?? 0
-  const pageStats = `${discovery.pagesAnalyzed ?? Math.min(safePagesLength, 3)}/${safePagesLength}`
+  const pageStats = `Stránky: ${discovery.pagesAnalyzed ?? Math.min(safePagesLength, 3)}/${safePagesLength}`
+  const batchStats =
+    typeof fileIndex === 'number' && typeof totalFiles === 'number'
+      ? `Soubor ${fileIndex}/${totalFiles}`
+      : ''
+
   let iterations = 0
   while (true) {
     iterations += 1
     assertWithinInteractionLimit(iterations)
-    const { action, dialogResult } = getDialogAction(
-      state.current,
+    const { action, dialogResult } = getDialogAction({
+      current: state.current,
       fileName,
       pageStats,
-      absPath
-    )
+      absPath,
+      batchStats,
+    })
     if (action.type === 'ai_prompt') {
       state.current = await handleAiPrompt(dialogResult.text, {
         ...parameters,
@@ -255,6 +189,8 @@ async function handleIterativeLoop(parameters, state) {
  * @param {string} parameters.originalNameOnly - Original filename without extension.
  * @param {function(object): Promise<import('./discovery.js').DiscoveryResult>} parameters.runDiscovery - Discovery function for /ai prompts.
  * @param {object} [parameters.aiSession] - Per-file AI session state.
+ * @param {number} [parameters.fileIndex] - Index of current file in batch.
+ * @param {number} [parameters.totalFiles] - Total files in batch.
  * @returns {Promise<{company: string, discovery: import('./discovery.js').DiscoveryResult}>} Final company and merged discovery object.
  */
 export async function handleIterativeInput(parameters) {

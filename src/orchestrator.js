@@ -28,6 +28,8 @@ async function handleManualFallback({
   pages,
   originalNameOnly,
   aiSession,
+  fileIndex,
+  totalFiles,
 }) {
   const { company, discovery: final } = await handleIterativeInput({
     absPath,
@@ -36,6 +38,8 @@ async function handleManualFallback({
     pages,
     originalNameOnly,
     runDiscovery,
+    fileIndex,
+    totalFiles,
   })
   return {
     ...merged,
@@ -139,6 +143,8 @@ async function processPipelineContent({
     pages,
     originalNameOnly,
     aiSession,
+    fileIndex: options.fileIndex,
+    totalFiles: options.totalFiles,
   })
   try {
     cleanupOCRPages(pages)
@@ -210,6 +216,8 @@ async function runPipeline({
  * @param {boolean} [options.force] - Force reprocessing.
  * @param {boolean} [options.dryRun] - Run in dry mode.
  * @param {number} [options.minChars] - Minimum characters for AI analysis.
+ * @param {number} [options.fileIndex] - Index of current file in batch.
+ * @param {number} [options.totalFiles] - Total files in batch.
  * @returns {Promise<void>}
  */
 export async function processFile(filePath, options = {}) {
