@@ -314,6 +314,39 @@ OCR pipeline už není omezena jen na PDF.
 - **Praktický dopad:** Vision OCR nyní zpracovává i běžné JPG/PNG skeny bez
   nutnosti mezikroků.
 
+### 7.11 Testovatelnost jako kvalita (Fáze 6)
+
+Při přechodu do Fáze 6 se těžiště přesunulo z funkční robustnosti na
+architektonickou testovatelnost.
+
+- **Internals-first:** Standard "internals nejdřív, exporty nakonec" snížil
+  kognitivní zátěž při review.
+- **Od globálu k injekci:** Module-level stav (`memoryCache`, `loggerContext`)
+  byl doplněn o resetovatelné mechanismy a parametrizované vstupy.
+- **Separace rolí přes `isMain`:** Entry point je oddělen od importovatelné
+  logiky, takže import nespouští side-effecty.
+- **Review mesh (3x):** Kombinace CodeRabbit + Copilot + lidské arbitráže
+  sloužila jako řízená kontrolní síť proti regresím.
+
+#### 7.11.1 Robustnost výstupů modelu
+
+- **JSON State Machine (F6 pokračování):** Obranný parser v `llm-json-parser.js`
+  sleduje stav uvozovek a hloubku vnoření, takže nepadá na balastní text kolem
+  JSON odpovědí.
+
+#### 7.11.2 Transakční bezpečnost rollbacku
+
+- **Forenzní dohledání souboru:** `findFileByHash` s limitovanou rekurzí
+  (`maxDepth: 5`) snížilo riziko selhání undo při změně cest mezi během rename a
+  rollbackem.
+
+#### 7.11.3 Co přinesla F6 navíc oproti F5
+
+- **Posun cíle:** F5 řešila produkční robustnost; F6 řešila dlouhodobou změnovou
+  udržitelnost a testovací izolaci.
+- **Kvalitativní závěr:** Nulové ignore-listy a stále zelený check pipeline
+  potvrdily, že čistota není kosmetika, ale architektonická vlastnost.
+
 ---
 
-_Analýza chatu a kognitivní audit (včetně Fáze 5) uzavřen 27. dubna 2026._
+_Analýza chatu a kognitivní audit (včetně Fáze 6) aktualizován 29. dubna 2026._

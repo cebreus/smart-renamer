@@ -83,20 +83,46 @@ definoval nové standardy práce s AI agenty.
 - **Výsledek:** Stabilní, bezpečný a lokalizovaný systém připravený na batch
   zpracování stovek dokumentů.
 
-## 6. Klíčové inženýrské milníky
+## 6. Fáze 6: TDD Readiness & Robustness (29. 4. 2026)
+
+- **Časový rámec:** 425 minut (7h 5m).
+- **Stav:** Funkční produkční řešení z F5, ale s omezenou testovatelností kvůli
+  hardcoded vstupům a module-level stavu.
+- **Děj:**
+  - **TDD Audit (0-35 min):** Analýza 16 souborů, identifikace bloků
+    testovatelnosti (`index.js` import side-effects, rigidní config, singleton
+    leakage).
+  - **Big Bang Refactor:** Plošná úprava jádra přinesla modularizaci LLM
+    pipeline, `isMain` guard a parametrizaci dříve globálních závislostí.
+  - **Externí QA smyčka (120-360 min):** 3x CodeRabbit + 3x Copilot Review +
+    implementační iterace přes GPT-5.3-Codex pod lidským dohledem.
+  - **Finální polish (360-425 min):** `SIGINT/SIGTERM` cleanup,
+    `VALUE_BLOCKLIST`, sjednocení konfigurací a eliminace posledních linter
+    rizik.
+- **Výsledek:** `pnpm check:all` bez chyb a potvrzení "All checks pass. Zero
+  regressions." v review výstupech.
+
+## 7. Klíčové inženýrské milníky
 
 1.  **Linter Supremacy:** Technické limity (`AI_GUARDRAILS`) jsou absolutní.
 2.  **Chain of Truth:** Cache (Fakta) > Registry (Pravidla) > AI (Odhady).
 3.  **Human-AI Synergy:** AI staví lešení a hrubou stavbu (90 %), člověk
     vtiskuje stabilitu a "duši" (10 %).
+4.  **Testability by design (Fáze 6):** Konfigurace a runtime stavy jsou
+    injektovatelné, ne implicitně globální.
+5.  **Review as system (Fáze 6):** Kvalita je výsledkem opakované vícezdrojové
+    kontroly, ne jednorázového passu.
 
-## 7. Technické resumé (Kumulativní)
+## 8. Technické resumé (Kumulativní)
 
-- **Celkový čas:** 19h 22m.
-- **Inženýrský poměr:** 8,2:1 (AI vs. Human).
+- **Celkový čas:** 26h 27m.
+- **Inženýrský poměr:** 7,3:1 (AI vs. Human).
 - **Integrita:** 0 chyb linteru, 100% Type Safety na vstupu.
 - **O(1) Learning:** Systém se učí z každého manuálního zásahu uživatele.
+- **Testovatelnost:** `isMain` guard, resetovatelné stavové mechanismy a
+  oddělení internals/exportů.
 
 ---
 
-_Zapsáno agentem Gemini CLI pod dozorem Architekta dne 27. dubna 2026._
+_Zapsáno agentem Gemini CLI pod dozorem Architekta, aktualizováno 29.
+dubna 2026._

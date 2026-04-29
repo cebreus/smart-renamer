@@ -15,7 +15,8 @@ projektem, včetně hlubokých diskusí a revizí.
 | **3. Analýza selhání a prevence** | **95 minut**             | Hledání příčin neefektivity, náprava ústavy a prompterů. |
 | **4. Hardening (Reálná data)**    | **487 minut**            | **Rekonstrukce Cache (O(1)) a lidská stabilizace.**      |
 | **5. Robustnost a UI Hardening**  | **510 minut**            | **3,5h interakce + 5h lidská analýza a vývoj.**          |
-| **CELKEM**                        | **1162 minut**           | **(19 hodin 22 minut) — Produkční integrita.**           |
+| **6. TDD Readiness & Robustness** | **425 minut**            | **Testovatelnost, de-singletonizace a finální polish.**  |
+| **CELKEM**                        | **1587 minut**           | **(26 hodin 27 minut) — Produkční integrita + TDD.**     |
 
 ## 2. Technické parametry (Resource Usage)
 
@@ -36,16 +37,24 @@ stopy.
 - **Context Management:** Dynamická regrese stran (6 -> 1) při detekci
   přetečení.
 
+### C. TDD Readiness & Robustness (Fáze 6)
+
+- **Model:** Gemini 3 Pro (CLI), GPT-5.3-Codex (externí implementace).
+- **Review Tools:** CodeRabbit (3 běhy), GitHub Copilot Review (3 běhy).
+- **Vstupy (Input):** **~12,4 milionu tokenů**.
+- **Produkce (Output):** **~38 000 tokenů**.
+
 ## 3. Analýza efektivity (AI vs. Human) podle fází
 
-| Fáze                            | Odhad člověk (Senior) | AI + Hybrid (Realita) | Poměr    | Charakteristika práce                                     |
-| :------------------------------ | :-------------------- | :-------------------- | :------- | :-------------------------------------------------------- |
-| **1. Generování kódu**          | 16 hodin              | 15 minut              | **64×**  | Extrémní objem (1100 LOC), selhání implementace Cache.    |
-| **2. QA (Sanace dluhu)**        | 16 hodin              | 55 minut              | **17×**  | **Oprava 173 chyb linteru způsobených AI ve Fázi 1.**     |
-| **3. Prevence (Sanace logiky)** | 8 hodin               | 95 minut              | **5×**   | **Řešení logických smyček a "AI arogance" z Fázi 1 a 2.** |
-| **4. Hardening (Reálná data)**  | 80 hodin              | 487 minut             | **9,8×** | Komplexní integrace (OCR, Cache), lidská stabilizace.     |
-| **5. Robustnost & Security**    | 40 hodin              | 510 minut             | **4,7×** | Hluboká lidská analýza, State machine, Security.          |
-| **CELKEM**                      | **160 hodin**         | **1162 minut**        | **8,2×** | **Kompletní doručení do produkční integrity.**            |
+| Fáze                              | Odhad člověk (Senior) | AI + Hybrid (Realita) | Poměr    | Charakteristika práce                                     |
+| :-------------------------------- | :-------------------- | :-------------------- | :------- | :-------------------------------------------------------- |
+| **1. Generování kódu**            | 16 hodin              | 15 minut              | **64×**  | Extrémní objem (1100 LOC), selhání implementace Cache.    |
+| **2. QA (Sanace dluhu)**          | 16 hodin              | 55 minut              | **17×**  | **Oprava 173 chyb linteru způsobených AI ve Fázi 1.**     |
+| **3. Prevence (Sanace logiky)**   | 8 hodin               | 95 minut              | **5×**   | **Řešení logických smyček a "AI arogance" z Fázi 1 a 2.** |
+| **4. Hardening (Reálná data)**    | 80 hodin              | 487 minut             | **9,8×** | Komplexní integrace (OCR, Cache), lidská stabilizace.     |
+| **5. Robustnost & Security**      | 40 hodin              | 510 minut             | **4,7×** | Hluboká lidská analýza, State machine, Security.          |
+| **6. TDD Readiness & Robustness** | 32 hodin              | 425 minut             | **4,5×** | Testovatelnost jádra, review-cykly a nulové regrese.      |
+| **CELKEM**                        | **192 hodin**         | **1587 minut**        | **7,3×** | **Kompletní doručení do produkční integrity + TDD.**      |
 
 ### Kognitivní audit efektivity:
 
@@ -57,6 +66,8 @@ stopy.
   s linterem.
 - **Fáze 4 jako skutečná hodnota:** Zde došlo k nápravě selhání AI a
   implementaci robustního O(1) Learning systému podle původního návrhu.
+- **Fáze 6 jako stabilizační uzávěr:** Refaktoring na testovatelnou architekturu
+  snížil budoucí náklady na změny a oddělil runtime od testovacího kontextu.
 - **Závěr:** AI proces je **6× náchylnější k tvorbě dluhu** v kreativní fázi,
   ale **10× rychlejší v jeho sanaci** při správném lidském vedení.
 
@@ -68,11 +79,13 @@ Rychlost dodávky byla ovlivněna:
   rozhodování.
 - **Neutrálně:** Fáze 4 a 5 prokázaly, že AI připraví 90 % architektury, ale
   finální stabilitu a ošetření edge-cases musí vtisknout lidská autorita.
+- **Neutrálně:** Fáze 6 potvrdila, že "hotovo" a "testovatelně hotovo" jsou dvě
+  odlišné kvalitativní úrovně.
 - **Záporně:** Incident "Registry Poisoning" ve Fázi 5, způsobený
   neinteraktivním testováním, což si vyžádalo sanaci registru a úpravu učící
   logiky.
 
-## 5. Kompletní informační vstupy (Fáze 1–5)
+## 5. Kompletní informační vstupy (Fáze 1–6)
 
 ### A. Řídicí dokumenty (Pět pilířů)
 
@@ -86,7 +99,7 @@ Tyto dokumenty tvořily neměnný základ (ústavu) projektu:
     omezení.
 5.  **`3-DESIGN.md`**: UX principy a "Intentional Minimalism".
 
-### B. Agentní speciality (Phase 3-5 Additions)
+### B. Agentní speciality (Phase 3-6 Additions)
 
 6.  **`GEMINI.md`**: Technické standardy (Named functions, node: prefix).
 7.  **Hierarchie pravdy**: Mandát pro prioritizaci Cache > Registry > AI.
@@ -94,6 +107,9 @@ Tyto dokumenty tvořily neměnný základ (ústavu) projektu:
 9.  **Stavový Mini-chat**: Zavedení `llm-session` pro kontinuální konverzaci.
 10. **JSON State Machine**: Mandát pro robustní parsování poškozených dat.
 11. **Security Hardening**: Striktní pravidla pro AppleScript a Path Traversal.
+12. **isMain Guard**: Oddělení role modulu a spustitelného entry pointu.
+13. **Internals-first**: Standard řazení modulů pro nižší kognitivní zátěž.
+14. **State Reset Hooks**: Mandát pro izolaci testů bez globálního leakování.
 
 ## 6. Statistiky Agentic Workflow (Audit Fáze 4)
 
@@ -133,3 +149,26 @@ Data z etapy produkční stabilizace (Session ID:
   (`SMART_RENAMER_LOCALE`) a české interní logy.
 - **OCR:** Rozšíření `bin/vision-ocr.swift` o nativní podporu obrazových formátů
   (JPG/PNG přes `CGImageSourceCreateWithURL`).
+
+## 8. Statistiky Agentic Workflow (Audit Fáze 6)
+
+Data z etapy TDD readiness a finálního polish (Session ID:
+`d6a299d0-5f81-49f4-92d8-2f96c4743654`).
+
+- **Tool/Review cykly:** 3x CodeRabbit + 3x GitHub Copilot Review.
+- **Code Velocity:** +1868 / -664 řádků (hlavní refaktor).
+- **Wall Time:** 7h 5m.
+- **Výstup kvality:** `pnpm check:all` bez chyb.
+
+### Rozsah dodávky ve Fázi 6 (obsahový audit)
+
+- **Architektura:** `isMain` guard v entry pointu a standard internals-first
+  (internals -> exporty).
+- **Testovatelnost:** De-singletonizace stavových částí a resetovatelné hooks
+  pro izolované testy.
+- **Modularizace jádra:** Extrakce pipeline do modulů (`llm-json-parser.js`,
+  `pipeline-steps.js`) a čistší separace odpovědností.
+- **Operational hardening:** `SIGINT`/`SIGTERM` cleanup a eliminace
+  nejrizikovějších runtime větví.
+- **Konfigurační disciplína:** Integrace `VALUE_BLOCKLIST` a sjednocení pravidel
+  lint/format bez ignore-listů.
