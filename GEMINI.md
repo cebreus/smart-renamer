@@ -1,146 +1,75 @@
-# Smart Renamer: Agent Engineering Context
+# GEMINI.md
 
-## 0. Project Identity & Strategic "Vibe"
+## Project
 
-- **Project:** Smart Renamer (macOS CLI/Quick Action)
-- **Goal:** Deterministic, safe, and minimalist renaming of documents
-  (PDFs/scans) using local OCR (Apple Vision) and a local LLM (Gemma 4 via LM
-  Studio).
-- **The "Vibe" (Intentional Minimalism):** Filenames must be as concise as
-  possible. No placeholders (`null` is omitted). Consistency is more important
-  than descriptive perfection.
-- **Architectural Memory (Why we do this):** Do not solve tasks using only LLM.
-  We found that LLM hallucinates over poor OCR. Therefore, we use a multi-level
-  strategy: `REGISTRY (Regex) → LLM Inference → Manual Fallback Dialog`. Respect
-  and do not bypass this architecture.
+Smart Renamer (macOS CLI/Quick Action) - Deterministic, safe, and minimalist
+document renaming. Consistency over descriptive perfection (no placeholders).
 
-## 1. Linter-First Supremacy (CRITICAL)
+## Stack
 
-- **Linter is Master:** Project linters (ESLint, Knip, Prettier) are the final
-  authority. Their rules override any aesthetic preferences from PRD or Design
-  docs.
-- **Pre-emptive Scan:** Always read config files (`eslint.config.js`,
-  `package.json`) BEFORE coding to identify hard constraints (e.g.,
-  max-statements: 12).
-- **Atomic Validation Loop:**
-  1. Write the first atomic module.
-  2. Run `pnpm check:lint` immediately.
-  3. Adjust coding style for the rest of the session based on results.
-- **Conflict Strategy:** If rules conflict (e.g., `consistent-return` vs
-  `unicorn`), STOP and propose a config change. Never use `eslint-disable`
-  without explicit user approval.
+Node.js 22+, ESM, `pnpm` exclusively, macOS native `osascript`. Apple Vision
+Framework (OCR), LM Studio (local LLM).
 
-## 2. Agent Protocol & Integrity
+## Commands
 
-- **Evidence first:** Back every codebase claim with tool output.
-- **If uncertain:** Say "I don't know, I will verify" and then verify.
-- **Verify before action:** Use `grep_search`/`read_file` before editing.
-- **No fabricated issues:** Never invent errors to satisfy expectations.
-- **Communication style:** Zero self-flagellation. Provide brief, technical
-  root-cause analysis and a verified path to correction. Act as a Senior
-  Architect: analyse "Edge Cases" (e.g., Apple Vision failure, LLM timeout)
-  before writing code. No fluff or filler.
+- Lint: `pnpm check:lint`
+- Format: `pnpm fix:format`
+- Check All: `pnpm check:all`
+- Safe Git Revert: `git restore -- <path>`
+- Safe Git Stash: `git stash push -m "reason/context"`
 
-## 3. Safety & Filesystem Operations
+## Architecture
 
-- **Minimal diffs only:** Change only what is required.
-- **No overwrite edits:** Do not use `write_file` for existing files.
-- **Preserve intent:** Keep logic/comments unless change requires it.
-- **Unsafe codebase:** Stop and ask before broad refactors.
-- **Before tools:** State what will change and why.
+- Pipeline: `REGISTRY (Regex) → LLM Inference → Manual Fallback Dialog`
+- Data Flow: Local OCR → Local LLM Inference → User Validation
 
-## 4. Engineering Philosophy
+## Rules
 
-- **Principles:** KISS, DRY, SOLID, YAGNI.
-- **Paradigm:** Functional/procedural; no classes.
-- **Top-level declarations:** Named `function` only (no top-level arrows).
-- **Function order (RECOMMENDED/ENFORCED STYLE):** Within every module,
-  functions should be ordered by dependency for readability and clarity. Note
-  that function declarations are hoisted in JavaScript, so the
-  "define-before-call" constraint only strictly applies to const/let function
-  expressions; function declarations may be referenced before their definition.
-  However, the following order is recommended as a readability and documentation
-  convention:
-  1. `@file` JSDoc + imports + module-level constants/state
-  2. Internal leaf functions (no outgoing calls to module-level siblings)
-  3. Internal composite functions (call other internal functions)
-  4. Exported functions — **always at the bottom**, as the public API surface
+- Linter is Master: ESLint/Knip/Prettier rules override aesthetic preferences.
+- IMPORTANT: Never use `eslint-disable` without explicit user approval. Propose
+  config changes on conflict.
+- TDD-Ready Architecture: Even without active tests, code must be strictly
+  testable. Isolate side-effects (I/O, OCR, APIs) to module boundaries. Core
+  logic must be pure, deterministic functions.
+- Use functional/procedural paradigm; no classes.
+- Use named `function` declarations only (no top-level arrow functions).
+- Enforce function order: Internals first (leaf → composite), Exports last.
+- Validate inputs at boundaries (validator contract: `{ isValid, error }`).
+- Preserve error chains using `Error.cause`.
+- Prefix booleans with `is/has/can/should`. Use `extract/to/from/parse` for
+  converters.
+- Use British English (GB-EN) only, A2 level simplicity.
+- JSDoc is required ONLY for exported functions; keep existing untouched.
+- IMPORTANT: Destructive git commands (`reset --hard`, `clean`, `checkout`,
+  staging) require user approval.
+- Never access secrets (`.env`, SSH keys).
 
-  Rationale: This ordering improves code clarity and serves as a module summary.
-  Exports are the contract; they belong at the end. _(Note: ESLint does not
-  enforce this structural order because plugins like `import/order` or
-  `no-use-before-define` cannot reliably handle JS hoisting without breaking
-  valid patterns. This is strictly an agent-enforced convention for
-  readability.)_
+## Workflow
 
-## 5. Strict Coding Standards
+- Pre-flight: Read `eslint.config.js` and `package.json` to understand the
+  linter rules before coding.
+- Verify first: Back every claim with tool output (`grep_search`/`view_file`
+  before editing).
+- Atomic Validation Loop: Write atomic module → Run `pnpm check:lint`
+  immediately → Adjust.
+- State what will change and why before using tools.
+- Provide brief, technical root-cause analysis; zero self-flagellation.
+- Analyze edge cases (e.g., OCR failure, LLM timeout) _before_ writing code.
+- Minimal changes: Do not refactor unrelated code. Apply minimal targeted diffs
+  only (no full file overwrites).
+- Scope boundaries: If a fix requires refactoring multiple files or changing
+  architecture, STOP. When unsure, explain both approaches and let the user
+  choose.
+- Confidence threshold: Do not guess. If you lack context, explicitly say "I
+  don't know". Answer only when highly confident.
+- Commit Policy: Commits are forbidden by default. EXCEPTION: You may commit
+  autonomously ONLY to safeguard a fully verified, atomic chunk of work before
+  starting a risky change. Never commit unverified or unfinished work.
 
-- **Runtime:** Node.js 22+, ESM only, stdlib imports with `node:`.
-- **Package Manager:** `pnpm` only (NEVER use `npm` or `yarn`).
-- **Async:** Prefer async/await.
-- **Syntax:** No `++`/`--`; use explicit increments. Preserve errors with
-  `Error.cause`.
-- **Exports:** Named exports only.
-- **Files:** Use `kebab-case.js` and coherent module grouping.
-- **Comments:** Use British English (GB-EN) only. Keep language concise and
-  simple (A2 level).
-- **Platform Constraint:** The script runs exclusively on macOS. Use `osascript`
-  for native dialogues.
-- **OCR Engine:** Exclusively via native Apple Vision Framework (called via a
-  temporary Swift script); do not use `pdftotext` or Tesseract.
-- **Privacy:** All LLM inference must occur via `localhost` (LM Studio).
-  Strictly forbid sending data to the cloud.
+## Out of scope
 
-## 6. Naming & Type Safety
-
-- **Booleans:** Prefix with `is/has/can/should`.
-- **Converters:** Use `extract/to/from/parse` naming.
-- **JSDoc:** Required for new functions only; keep existing JSDoc untouched.
-- **Validation:** Validate inputs at boundaries and fail fast.
-- **Validator contract:** Return `{ isValid, error }`.
-- **Constants:** Use SCREAMING_SNAKE_CASE for magic values.
-
-## 7. Execution Workflow & Checklist
-
-1. **Verify:** Confirm current state with tools.
-2. **Analyze:** Compare state with these standards.
-3. **Execute:** Apply minimal targeted edits.
-4. **Validate:** Run `pnpm check:lint`.
-
-### Final Agent Checklist:
-
-- \[ ] Reused library solutions where appropriate?
-- \[ ] Kept named `function` declarations at module top-level?
-- \[ ] Function order: internals first, exports last?
-- \[ ] Used `is/has/can/should` for booleans?
-- \[ ] Validated inputs at entry points?
-- \[ ] Preserved error chains with `Error.cause`?
-- \[ ] Passed `pnpm check:all`?
-
-## 8. Source Control & Safety Protocol
-
-- **Index is user-owned:** Do not stage/unstage (`git add*`, `git reset`,
-  `git restore --staged`) unless explicitly requested.
-- **Safe revert allowed:** Use `git restore -- <path>` to reset working-tree
-  content to current index.
-- **Destructive git is blocked by default:** `git reset --hard`,
-  `git clean -fd`, `git checkout -- <path>`, force push, and history rewrite
-  commands require explicit user approval.
-- **Prefer stash for temporary context switches:** Use named stashes
-  (`git stash push -m "reason/context"`), review with `git stash list`, and
-  clean obsolete stashes.
-- **Never access secrets:** Do not read/export `.env`, SSH keys, or secret
-  files.
-- **Transparency:** Run `git status` before and after any source-control action.
-
-## 9. Command Approval Profile
-
-- **Allow:** `ls`, `rg`, `grep`, `sed`, `git diff`, `git status`, `git log`,
-  `git restore -- <path>`, `git stash list/show/push -m/apply/pop`,
-  `pnpm fix:format`, `pnpm check:lint`, `pnpm check:all`.
-- **Ask first:** `git checkout`, `git reset --hard`, `git clean -fd`,
-  `git commit --amend`, any staging/unstaging (`git add*`, `git reset`,
-  `git restore --staged`).
-- **Stash cleanup:** `git stash drop`/`git stash clear` only for explicit
-  cleanup of obsolete named stashes, after `git stash list`.
-- **Fallback:** If command is not listed or can mutate state, ask first.
+- NEVER solve renaming tasks using only the LLM (bypassing Regex/Fallback
+  pipeline).
+- NEVER use `npm` or `yarn` (strictly `pnpm`).
+- Do not use `pdftotext` or Tesseract (Apple Vision Framework only).
+- Do not send data to the cloud (strictly localhost).
