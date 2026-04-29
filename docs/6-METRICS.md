@@ -104,7 +104,6 @@ Detailní výpis aktivity AI agenta během finálního vytvrzení (Session ID:
 - **Code Velocity:** +2133 / -2398 řádků.
 - **Success Rate:** 97.1 % (7 selhání na 242 volání).
 - **Agent Active Time:** 1h 40m 50s.
-- **Success Rate:** 97.1 %.
 - **Wall Time:** 6h 46m 43s.
 
 ## 7. Statistiky Agentic Workflow (Audit Fáze 5)

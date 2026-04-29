@@ -121,7 +121,7 @@ Systém detekuje typ dokumentu a podle něj sestavuje popis.
 | Potvrzení platby   | Slova: potvrzení platby, payment receipt, daňový doklad k přijaté platbě | `Potvrzení platby`                                                          |
 | Smlouva            | Slova: smlouva, contract, agreement                                      | max 6 slov předmětu smlouvy                                                 |
 | Výpis / vyúčtování | Slova: výpis, vyúčtování, statement                                      | typ služby (např. „Vyúčtování VDSL")                                        |
-| Daňové přiznání    | Specifické vzory (viz VALUE_BLACKLIST)                                   | název přiznání                                                              |
+| Daňové přiznání    | Specifické vzory (viz VALUE_BLOCKLIST)                                   | název přiznání                                                              |
 | Screenshot         | Detekce z názvu souboru nebo absence struktury                           | `Screenshot` + max 6 slov kontextu                                          |
 | Ostatní            | —                                                                        | popis extrahovaný LLM, max 6 slov                                           |
 
@@ -234,7 +234,7 @@ víceúrovňovou strategii:
 - Regex pokrývá formáty: `D.M.YYYY`, `D/M/YYYY`, `D. M. YYYY`, `YYYY-MM-DD`,
   `DD.MM.YY`.
 - **Pivot year pro dvouciferné roky (YY):** pokud YY ≤ 50 → 20YY, jinak 19YY.
-- Hodnoty z `VALUE_BLACKLIST` jsou přeskočeny.
+- Hodnoty z `VALUE_BLOCKLIST` jsou přeskočeny.
 
 **Úroveň 3 — `mtime` souboru (fallback):**
 
@@ -251,7 +251,7 @@ víceúrovňovou strategii:
   mtime maximálně na aktuální systémový čas (`Date.now()`). Jakékoliv datum v
   budoucnosti se ignoruje a pole `date` zůstane `null`.
 
-**VALUE_BLACKLIST:**
+**VALUE_BLOCKLIST:**
 
 - Konfigurační pole v `CONFIG`; obsahuje konkrétní hodnoty (stringy) nebo regex
   vzory.
@@ -476,7 +476,7 @@ const CONFIG = {
   OCR_MIN_CHARS: 30,
   REGISTRY_FILE: '<script-dir>/registry.json5',
   LOG_FILE: '<script-dir>/smart-renamer.log',
-  VALUE_BLACKLIST: [], // Array; např. ['01.01.1990', /^\d{2}\.\d{2}\.\d{2}$/]
+  VALUE_BLOCKLIST: [], // Array; např. ['01.01.1990', /^\d{2}\.\d{2}\.\d{2}$/]
 }
 ```
 
@@ -546,7 +546,7 @@ Následující příklady slouží jako primární vizualizace cílového stavu 
 - \[ ] Chybějící firma, datum nebo popis jsou vynechány — žádný placeholder
 - \[ ] Přípona výsledného souboru je vždy malými písmeny
 - \[ ] Datum je extrahováno i z textu ve stylu „v Praze dne 20.1.2025"
-- \[ ] Hodnoty z `VALUE_BLACKLIST` nejsou ve výsledném názvu
+- \[ ] Hodnoty z `VALUE_BLOCKLIST` nejsou ve výsledném názvu
 - \[ ] REGISTRY funguje i jako prázdný soubor — LLM navrhne firmu
 - \[ ] Po dialogu je uživatel dotázán na uložení do `registry.json5`
 - \[ ] Každé přejmenování je zaznamenáno v `smart-renamer.log` s absolutní i
@@ -646,7 +646,7 @@ Následující příklady slouží jako primární vizualizace cílového stavu 
 | Termín          | Definice                                                                    |
 | --------------- | --------------------------------------------------------------------------- |
 | REGISTRY        | JSON soubor se vzory (regex → firma + popis); první shoda vyhrává           |
-| VALUE_BLACKLIST | Konfigurační seznam hodnot ignorovaných při extrakci (data, řetězce, regex) |
+| VALUE_BLOCKLIST | Konfigurační seznam hodnot ignorovaných při extrakci (data, řetězce, regex) |
 | Transaction log | Append-only JSONL soubor s historií přejmenování; umožňuje revert           |
 | Session hash    | SHA-256 hash (streaming) pro jeden dávkový běh; bez zápisu na disk          |
 | OCR práh        | Minimální počet znaků z OCR (30); pod prahem se LLM nevolá                  |

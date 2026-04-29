@@ -54,6 +54,24 @@
 - **Principles:** KISS, DRY, SOLID, YAGNI.
 - **Paradigm:** Functional/procedural; no classes.
 - **Top-level declarations:** Named `function` only (no top-level arrows).
+- **Function order (RECOMMENDED/ENFORCED STYLE):** Within every module,
+  functions should be ordered by dependency for readability and clarity. Note
+  that function declarations are hoisted in JavaScript, so the
+  "define-before-call" constraint only strictly applies to const/let function
+  expressions; function declarations may be referenced before their definition.
+  However, the following order is recommended as a readability and documentation
+  convention:
+  1. `@file` JSDoc + imports + module-level constants/state
+  2. Internal leaf functions (no outgoing calls to module-level siblings)
+  3. Internal composite functions (call other internal functions)
+  4. Exported functions — **always at the bottom**, as the public API surface
+
+  Rationale: This ordering improves code clarity and serves as a module summary.
+  Exports are the contract; they belong at the end. _(Note: ESLint does not
+  enforce this structural order because plugins like `import/order` or
+  `no-use-before-define` cannot reliably handle JS hoisting without breaking
+  valid patterns. This is strictly an agent-enforced convention for
+  readability.)_
 
 ## 5. Strict Coding Standards
 
@@ -93,6 +111,7 @@
 
 - \[ ] Reused library solutions where appropriate?
 - \[ ] Kept named `function` declarations at module top-level?
+- \[ ] Function order: internals first, exports last?
 - \[ ] Used `is/has/can/should` for booleans?
 - \[ ] Validated inputs at entry points?
 - \[ ] Preserved error chains with `Error.cause`?
