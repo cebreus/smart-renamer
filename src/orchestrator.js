@@ -1,3 +1,7 @@
+/**
+ * @file Orchestrator for the main renaming pipeline.
+ */
+
 import path from 'node:path'
 
 import { getCachedMetadata } from './cache.js'
@@ -13,63 +17,10 @@ import {
 import { handleIterativeInput } from './interaction.js'
 import { logger } from './logger.js'
 import { cleanupOCRPages, runOCR } from './ocr.js'
-import { addRegistryRule, loadRegistry, matchRegistry } from './registry.js'
-import {
-  assembleFilename,
-  getMtimeDate,
-  parseProposedName,
-  performRename,
-} from './rename.js'
-
-function learnNewRule(userInput, text, title) {
-  if (!userInput || !text || userInput.length < 3) return
-  const words = userInput.split(/\s+/).filter((word) => word.length >= 3)
-  for (const word of words) {
-    if (text.toLowerCase().includes(word.toLowerCase())) {
-      addRegistryRule({ pattern: word, company: userInput, title })
-      return
-    }
-  }
-}
-
-function finalize(absPath, hash, components, extension) {
-  const newFilename = assembleFilename({ ...components, extension })
-  const isDry = CONFIG.DRY_RUN
-  if (newFilename === path.basename(absPath)) {
-    logger.status(3, 'Název je již optimální.')
-    logger.transaction({
-      status: 'skipped_no_change',
-      original_abs: absPath,
-      final_abs: absPath,
-      hash,
-      ...components,
-    })
-    return
-  }
-  try {
-    const finalPath = isDry
-      ? path.join(path.dirname(absPath), newFilename)
-      : performRename(absPath, newFilename)
-    const prefix = isDry ? '\u001B[35m[ZKUŠEBNÍ REŽIM]\u001B[0m ' : ''
-    logger.status(3, `${prefix}Přejmenováno na: ${path.basename(finalPath)}`)
-    logger.transaction({
-      status: isDry ? 'dry_run' : 'ok',
-      original_abs: absPath,
-      final_abs: finalPath,
-      hash,
-      ...components,
-    })
-  } catch (error) {
-    logger.error(`Přejmenování selhalo: ${error.message}`)
-    logger.transaction({
-      status: 'failed',
-      original_abs: absPath,
-      hash,
-      error: error.message,
-    })
-    throw error
-  }
-}
+import { finalize, handlePipelineSuccess } from './pipeline-steps.js'
+import { loadRegistry, matchRegistry } from './registry.js'
+import { parseProposedName } from './rename.js'
+import { ensureString } from './utilities.js'
 
 async function handleManualFallback({
   absPath,
@@ -95,26 +46,6 @@ async function handleManualFallback({
   }
 }
 
-function finalizePipeline(
-  absPath,
-  hash,
-  merged,
-  { extension, fullText, pages }
-) {
-  const mergedCopy = { ...merged }
-  let isMtime = false
-  if (!mergedCopy.date) {
-    mergedCopy.date = getMtimeDate(absPath)
-    isMtime = true
-  }
-
-  cleanupOCRPages(pages)
-  if (mergedCopy.method === 'manual' && mergedCopy.company) {
-    learnNewRule(mergedCopy.company, fullText, mergedCopy.title)
-  }
-  finalize(absPath, hash, { ...mergedCopy, isMtime }, extension)
-}
-
 async function analyzeContent({
   aiSession,
   absPath,
@@ -122,16 +53,22 @@ async function analyzeContent({
   registry,
   cached,
   hint,
+  minChars,
 }) {
   const { pages } = await runOCR(absPath)
-  const fullText = pages.map((p) => p.text).join('\n')
+  const fullText = pages.map((p) => p.text || '').join('\n')
   const registryMatch = matchRegistry(fullText, registry)
 
   if (registryMatch.company) {
     logger.warn(`Shoda v registru [${registryMatch.company}].`)
   }
 
-  const discovery = await getDiscovery(pages, originalNameOnly, aiSession)
+  const discovery = await getDiscovery(
+    pages,
+    originalNameOnly,
+    aiSession,
+    minChars
+  )
   const merged = mergeResults({
     registryMatch,
     discovery,
@@ -143,43 +80,124 @@ async function analyzeContent({
   return { pages, fullText, merged }
 }
 
-async function runPipeline({ absPath, extension, originalNameOnly, hash }) {
-  let aiSession
+function getPipelineContext(originalNameOnly, hash, force) {
+  const registry = loadRegistry()
+  const cached = getCachedMetadata(hash, { force })
+  const hint = parseProposedName(originalNameOnly)
+  return { registry, cached, hint }
+}
 
+function handleCacheHit({
+  absPath,
+  hash,
+  extension,
+  cached,
+  registry,
+  options,
+  force,
+}) {
+  if (
+    cached?.company &&
+    registry.some((entry) => entry.company === cached.company) &&
+    !force
+  ) {
+    logger.warn(`Nalezeno v historii [${cached.company}].`)
+    finalize(
+      absPath,
+      hash,
+      { ...cached, method: 'cache' },
+      { ...options, extension }
+    )
+    return true
+  }
+  return false
+}
+
+async function processPipelineContent({
+  aiSession,
+  absPath,
+  originalNameOnly,
+  registry,
+  cached,
+  hint,
+  options,
+  extension,
+  hash,
+}) {
+  const { pages, fullText, merged } = await analyzeContent({
+    aiSession,
+    absPath,
+    originalNameOnly,
+    registry,
+    cached,
+    hint,
+    minChars: options.minChars,
+  })
+  const final = await handleManualFallback({
+    absPath,
+    merged,
+    pages,
+    originalNameOnly,
+    aiSession,
+  })
+  try {
+    cleanupOCRPages(pages)
+  } catch (error) {
+    logger.debug(
+      `cleanupOCRPages selhalo pro stránky: ${error?.message || String(error)}`
+    )
+  }
+  await handlePipelineSuccess({
+    absPath,
+    hash,
+    final,
+    options,
+    extension,
+    fullText,
+    pages,
+  })
+}
+
+async function runPipeline({
+  absPath,
+  extension,
+  originalNameOnly,
+  hash,
+  options = {},
+}) {
+  let aiSession
   try {
     aiSession = createDiscoverySession()
-    const registry = loadRegistry()
-    const cached = getCachedMetadata(hash)
-    const hint = parseProposedName(originalNameOnly)
-
+    const force = options.force ?? CONFIG.FORCE
+    const { registry, cached, hint } = getPipelineContext(
+      originalNameOnly,
+      hash,
+      force
+    )
     if (
-      cached?.company &&
-      registry.some((entry) => entry.company === cached.company) &&
-      !CONFIG.FORCE
+      handleCacheHit({
+        absPath,
+        hash,
+        extension,
+        cached,
+        registry,
+        options,
+        force,
+      })
     ) {
-      logger.warn(`Nalezeno v historii [${cached.company}].`)
-      finalize(absPath, hash, { ...cached, method: 'cache' }, extension)
       return
     }
-
-    const { pages, fullText, merged } = await analyzeContent({
+    await processPipelineContent({
       aiSession,
       absPath,
       originalNameOnly,
       registry,
       cached,
       hint,
+      options,
+      extension,
+      hash,
     })
-
-    const final = await handleManualFallback({
-      absPath,
-      merged,
-      pages,
-      originalNameOnly,
-      aiSession,
-    })
-
-    finalizePipeline(absPath, hash, final, { extension, fullText, pages })
   } finally {
     clearDiscoverySession(aiSession)
   }
@@ -188,12 +206,14 @@ async function runPipeline({ absPath, extension, originalNameOnly, hash }) {
 /**
  * Processes a single file through the entire pipeline.
  * @param {string} filePath - Path to the file.
+ * @param {object} [options] - Execution options.
+ * @param {boolean} [options.force] - Force reprocessing.
+ * @param {boolean} [options.dryRun] - Run in dry mode.
+ * @param {number} [options.minChars] - Minimum characters for AI analysis.
  * @returns {Promise<void>}
  */
-export async function processFile(filePath) {
-  if (typeof filePath !== 'string' || filePath.trim() === '') {
-    throw new TypeError('filePath must be a non-empty string')
-  }
+export async function processFile(filePath, options = {}) {
+  ensureString(filePath, 'filePath')
   const absPath = path.resolve(filePath)
   const hash = await calculateHash(absPath)
   logger.separator()
@@ -204,10 +224,12 @@ export async function processFile(filePath) {
       extension: path.extname(absPath),
       originalNameOnly: path.basename(absPath, path.extname(absPath)),
       hash,
+      options,
     })
   } catch (error) {
-    if (!error.message.includes('AI')) {
-      logger.error(`Chyba: ${error.message}`)
+    const message = error?.message
+    if (typeof message !== 'string' || !message.includes('AI')) {
+      logger.error(`Chyba: ${message || String(error)}`)
     }
     throw error
   }

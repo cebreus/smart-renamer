@@ -1,8 +1,11 @@
 /**
  * @file Module for building and cleaning filenames.
  */
+
 import { existsSync, renameSync, statSync } from 'node:fs'
 import path from 'node:path'
+
+import { ensureFileExists, ensureObject, ensureString } from './utilities.js'
 
 const FORBIDDEN_CHARS = /[:/\\|"*?<>]/g
 
@@ -95,15 +98,17 @@ function addTitlePart(parts, title) {
 
 /**
  * Builds final filename from parts.
- * @param {object} params - Build parameters.
- * @param {string} params.date - Date.
- * @param {string} params.company - Company.
- * @param {string} params.title - Title.
- * @param {string} params.extension - File extension.
- * @param {boolean} params.isMtime - If MTime was used.
+ * @param {object} parameters - Build parameters.
+ * @param {string} parameters.date - Date (YYYY-MM-DD).
+ * @param {string} parameters.company - Company name.
+ * @param {string} parameters.title - Document title.
+ * @param {string} parameters.extension - File extension.
+ * @param {boolean} parameters.isMtime - Whether MTime was used for the date.
  * @returns {string} Built name.
  */
-export function assembleFilename({ date, company, title, extension, isMtime }) {
+export function assembleFilename(parameters) {
+  ensureObject(parameters, 'parameters')
+  const { date, company, title, extension, isMtime } = parameters
   const parts = []
 
   if (date && date !== 'null') {
@@ -180,7 +185,9 @@ function resolveSafePath(
         `Invalid target path outside base directory: ${candidate}`
       )
     }
-    if (counter > 999) break
+    if (counter > 999) {
+      throw new Error('Unable to find non-colliding path after 1000 attempts')
+    }
   }
 
   return candidate
@@ -193,25 +200,26 @@ function resolveSafePath(
  * @returns {string} Final path.
  */
 export function performUndo(currentPath, targetPath) {
+  ensureString(currentPath, 'currentPath')
+  ensureString(targetPath, 'targetPath')
   const baseDirectory = path.resolve(path.dirname(targetPath))
   const resolvedCurrentPath = path.resolve(currentPath)
   const resolvedTargetPath = path.resolve(targetPath)
 
-  if (!isInsideBaseDirectory(resolvedCurrentPath, baseDirectory)) {
-    throw new Error(
-      `Invalid source path outside base directory: ${resolvedCurrentPath}`
-    )
-  }
   if (!isInsideBaseDirectory(resolvedTargetPath, baseDirectory)) {
     throw new Error(
       `Invalid target path outside base directory: ${resolvedTargetPath}`
     )
   }
 
-  if (!existsSync(resolvedCurrentPath)) {
-    const error = new Error(`File not found for undo: ${resolvedCurrentPath}`)
-    error.code = 'FILE_NOT_FOUND'
-    throw error
+  try {
+    ensureFileExists(resolvedCurrentPath)
+  } catch (error) {
+    const newError = new Error(
+      `File not found during rename: ${resolvedCurrentPath}`
+    )
+    newError.code = 'FILE_NOT_FOUND'
+    throw Object.assign(newError, { cause: error })
   }
 
   const directory = path.dirname(resolvedTargetPath)
@@ -229,12 +237,8 @@ export function performUndo(currentPath, targetPath) {
  * @returns {string} Final safe file path.
  */
 export function performRename(oldPath, newName) {
-  if (typeof oldPath !== 'string' || oldPath.trim() === '') {
-    throw new TypeError('oldPath must be a non-empty string')
-  }
-  if (typeof newName !== 'string' || newName.trim() === '') {
-    throw new TypeError('newName must be a non-empty string')
-  }
+  ensureString(oldPath, 'oldPath')
+  ensureString(newName, 'newName')
   const directory = path.dirname(oldPath)
   const { name, ext } = path.parse(newName)
 
@@ -249,14 +253,15 @@ export function performRename(oldPath, newName) {
  * @returns {string} Date as YYYY-MM-DD.
  */
 export function getMtimeDate(filePath) {
+  ensureString(filePath, 'filePath')
   const stats = statSync(filePath)
   return stats.mtime.toISOString().split('T')[0]
 }
 
 /**
- * Parses a user-edited filename string back into its components.
+ * Split an edited filename (no extension) into date, company, and title.
  * @param {string} filename - The edited filename (without extension).
- * @returns {object} { date, company, title }
+ * @returns {object} Object containing date, company, and title.
  */
 export function parseProposedName(filename) {
   let date, company, title

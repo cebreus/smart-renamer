@@ -1,6 +1,8 @@
 /**
- * @file General tools for Smart Renamer.
+ * @file General purpose utility functions and validation helpers.
  */
+
+import { existsSync } from 'node:fs'
 
 const DEFAULT_PIVOT = 50
 
@@ -104,4 +106,143 @@ export function extractDateFallback(text, pivot = DEFAULT_PIVOT) {
     }
   }
   return undefined
+}
+
+/**
+ * Builds compact trace-safe summaries of LLM messages.
+ * @param {Array<object>} messages - Chat message payload.
+ * @returns {Array<object>} Summarized per-message metadata.
+ */
+export function summarizeTraceMessages(messages) {
+  if (!Array.isArray(messages)) return []
+  return messages.map((message, index) => {
+    if (!Array.isArray(message.content)) {
+      const asText = String(message.content || '')
+      return {
+        index,
+        role: message.role,
+        content_type: 'text',
+        chars: asText.length,
+      }
+    }
+
+    const summary = {
+      index,
+      role: message.role,
+      content_type: 'mixed',
+      images: 0,
+      text_chars: 0,
+      text_parts: 0,
+    }
+
+    for (const part of message.content) {
+      if (part.type === 'image_url') {
+        summary.images += 1
+      } else if (part.type === 'text') {
+        summary.text_parts += 1
+        summary.text_chars += (part.text || '').length
+      }
+    }
+    return summary
+  })
+}
+
+/**
+ * Replaces base64 image payloads in message content with a static redacted marker.
+ * @param {Array<object>} messages - Chat message payload.
+ * @returns {Array<object>} Message payload with redacted image urls.
+ */
+export function redactImageUrls(messages) {
+  if (!Array.isArray(messages)) return []
+  return messages.map((message) => ({
+    ...message,
+    content: Array.isArray(message.content)
+      ? message.content.map((part) =>
+          part.type === 'image_url'
+            ? { type: 'image_url', image_url: { url: '[REDACTED]' } }
+            : part
+        )
+      : message.content,
+  }))
+}
+
+/**
+ * Checks if a string value represents a truthy state (true, 1).
+ * @param {string|undefined} value - Environment variable value.
+ * @returns {boolean} True if truthy.
+ */
+export function isTruthyEnvironment(value) {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase()
+  return normalized === 'true' || normalized === '1'
+}
+
+/**
+ * Parses a positive integer from a string, with a default fallback.
+ * @param {string|undefined} value - String to parse.
+ * @param {number} defaultValue - Fallback value.
+ * @param {string} name - Parameter name for error reporting.
+ * @returns {number} Parsed integer.
+ * @throws {TypeError} If result is not a positive integer.
+ */
+export function parsePositiveInteger(value, defaultValue, name) {
+  const parsed = value === undefined ? defaultValue : Number.parseInt(value, 10)
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new TypeError(`${name} must be a positive integer`)
+  }
+  return parsed
+}
+
+/**
+ * Ensures value is a non-empty string.
+ * @param {string} value - Value to check.
+ * @param {string} name - Variable name for error.
+ * @throws {TypeError}
+ */
+export function ensureString(value, name) {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new TypeError(`${name} must be a non-empty string`)
+  }
+}
+
+/**
+ * Ensures value is an array.
+ * @param {Array} value - Value to check.
+ * @param {string} name - Variable name for error.
+ * @throws {TypeError}
+ */
+export function ensureArray(value, name) {
+  if (!Array.isArray(value)) {
+    throw new TypeError(`${name} must be an array`)
+  }
+}
+
+/**
+ * Ensures value is a non-null object.
+ * @param {object} value - Value to check.
+ * @param {string} name - Variable name for error.
+ * @throws {TypeError}
+ */
+export function ensureObject(value, name) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new TypeError(`${name} must be an object`)
+  }
+}
+
+/**
+ * Ensures a file exists on disk.
+ * @param {string} filePath - Path to check.
+ * @throws {TypeError} If filePath is not a valid non-empty string.
+ * @throws {Error} If file does not exist at filePath.
+ */
+export function ensureFileExists(filePath) {
+  if (typeof filePath !== 'string' || filePath.trim() === '') {
+    throw new TypeError(
+      `filePath must be a non-empty string, got: ${typeof filePath}`
+    )
+  }
+  if (!existsSync(filePath)) {
+    throw new Error(`File not found: ${filePath}`)
+  }
 }

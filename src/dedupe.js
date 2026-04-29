@@ -1,8 +1,11 @@
 /**
  * @file Deduplication tools for file processing.
  */
+
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
+
+import { ensureString } from './utilities.js'
 
 /**
  * Calculates file hash.
@@ -10,9 +13,7 @@ import { createReadStream } from 'node:fs'
  * @returns {Promise<string>} File hash.
  */
 export async function calculateHash(filePath) {
-  if (typeof filePath !== 'string' || filePath.trim() === '') {
-    throw new TypeError('filePath must be a non-empty string')
-  }
+  ensureString(filePath, 'filePath')
 
   const hash = createHash('sha256')
   const stream = createReadStream(filePath)
@@ -32,14 +33,13 @@ export async function calculateHash(filePath) {
 /**
  * Creates deduplication function for history check.
  * @returns {function(string): boolean} Function returning true if hash is new.
+ * @throws {TypeError} Returned isUnique throws when hash is not a non-empty string.
  */
 export function createDeduplicator() {
   const seenHashes = new Set()
 
   return function isUnique(hash) {
-    if (typeof hash !== 'string' || hash.trim() === '') {
-      throw new TypeError('hash must be a non-empty string')
-    }
+    ensureString(hash, 'hash')
 
     if (seenHashes.has(hash)) {
       return false

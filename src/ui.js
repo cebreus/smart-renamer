@@ -1,16 +1,13 @@
 /**
  * @file UI tools for macOS.
  */
+
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 
 import { logger } from './logger.js'
+import { ensureString } from './utilities.js'
 
-/**
- * Escapes text for safe use in AppleScript strings.
- * @param {string} value - Input text.
- * @returns {string} Escaped text safe for AppleScript.
- */
 function escapeAppleScriptString(value) {
   return value
     .replaceAll('\\', String.raw`\\`)
@@ -50,14 +47,14 @@ function parseDialogOutput(processResult, labels) {
 
   if (!buttonMatch || !txtMatch) {
     logger.error(
-      `Nečekaný výstup AppleScriptu při zpracování výsledku (stav: ${processResult.status})`
+      `Unexpected AppleScript output when processing result (status: ${processResult.status})`
     )
     throw new Error('Invalid response from dialog')
   }
 
   const button = mapButtonToCanonical(buttonMatch[1].trim(), labels)
   if (!button) {
-    logger.error(`Neznámé tlačítko z AppleScriptu: ${buttonMatch[1].trim()}`)
+    logger.error(`Unknown button from AppleScript: ${buttonMatch[1].trim()}`)
     throw new Error('Unknown dialog button')
   }
 
@@ -70,6 +67,7 @@ function parseDialogOutput(processResult, labels) {
  * @returns {void}
  */
 export function openPreview(filePath) {
+  ensureString(filePath, 'filePath')
   if (existsSync(filePath)) {
     const processResult = spawnSync('/usr/bin/open', [filePath])
     if (processResult.error) {
@@ -80,10 +78,17 @@ export function openPreview(filePath) {
 
 /**
  * Closes file preview in macOS Preview.
- * @param {string} fileName - File name.
+ * @param {string} previewIdentifier - Identifier used when opening preview.
  * @returns {void}
  */
-export function closePreview(fileName) {
+export function closePreview(previewIdentifier) {
+  const fileName =
+    String(previewIdentifier || '')
+      .split('/')
+      .pop() || ''
+  if (!fileName) {
+    return // Guard against empty fileName
+  }
   const escapedName = escapeAppleScriptString(fileName)
   const script = `tell application "Preview" to close (every window whose name contains "${escapedName}")`
   const osascriptPath = '/usr/bin/osascript'
@@ -100,7 +105,7 @@ export function closePreview(fileName) {
  * Shows native input dialog with 3 buttons.
  * @param {string} promptText - Prompt text.
  * @param {string} [defaultValue] - Default value.
- * @returns {object|undefined} { text: string, button: string } or undefined.
+ * @returns {{text: string, button: string}|undefined} Object with text and button, or undefined if cancelled.
  */
 export function showInputDialog(promptText, defaultValue = '') {
   const escapedPrompt = escapeAppleScriptString(promptText)
@@ -130,9 +135,7 @@ export function showInputDialog(promptText, defaultValue = '') {
  * @returns {string} Sanitised string.
  */
 export function sanitizeUserInput(input) {
-  if (typeof input !== 'string') {
-    throw new TypeError('input must be a string')
-  }
+  ensureString(input, 'input')
   if (input.trim() === '') return ''
 
   return input

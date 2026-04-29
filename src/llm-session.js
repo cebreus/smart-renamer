@@ -1,5 +1,12 @@
+/**
+ * @file Session management for per-file LLM interactions.
+ */
+
+import { ensureObject } from './utilities.js'
+
 function trimToLimit(value, limit) {
   if (!value) return ''
+  if (!Number.isInteger(limit) || limit <= 0) return ''
   return value.length > limit ? value.slice(-limit) : value
 }
 
@@ -18,21 +25,16 @@ function appendSessionSummary(session, overflowTurns, maxSummaryChars) {
   session.summary = trimToLimit(combined, maxSummaryChars)
 }
 
-/**
- * Updates per-file LLM session with a new interaction turn.
- * @param {object|undefined} session - Session object.
- * @param {string} userPrompt - User refinement prompt.
- * @param {object} result - Parsed LLM result.
- * @param {object} limits - Session retention limits.
- * @param {number} limits.maxTurns - Maximum number of turns kept in history.
- * @param {number} limits.maxSummaryChars - Maximum summary size.
- * @returns {void}
- */
-export function updateSession(session, userPrompt, result, limits) {
-  if (!session) return
-  const { maxSummaryChars, maxTurns } = limits
+function compactSessionHistory(session, maxTurns, maxSummaryChars) {
+  if (session.history.length <= maxTurns) return
 
-  const turn = {
+  const overflowCount = session.history.length - maxTurns
+  const overflowTurns = session.history.splice(0, overflowCount)
+  appendSessionSummary(session, overflowTurns, maxSummaryChars)
+}
+
+function createSessionTurn(userPrompt, result) {
+  return {
     result: {
       company: result?.company,
       date: result?.date,
@@ -41,13 +43,32 @@ export function updateSession(session, userPrompt, result, limits) {
     },
     userPrompt: userPrompt || '',
   }
-  session.history.push(turn)
+}
 
-  if (session.history.length > maxTurns) {
-    const overflowCount = session.history.length - maxTurns
-    const overflowTurns = session.history.splice(0, overflowCount)
-    appendSessionSummary(session, overflowTurns, maxSummaryChars)
-  }
+function ensureSessionHistory(session) {
+  if (Array.isArray(session.history)) return
+  session.history = []
+}
+
+/**
+ * Updates per-file LLM session with a new interaction turn.
+ * @param {object} session - Session object.
+ * @param {string} userPrompt - User refinement prompt.
+ * @param {object} result - Parsed LLM result.
+ * @param {object} limits - Session retention limits.
+ * @param {number} limits.maxTurns - Maximum number of turns kept in history.
+ * @param {number} limits.maxSummaryChars - Maximum summary size.
+ * @returns {void}
+ */
+export function updateSession(session, userPrompt, result, limits) {
+  ensureObject(session, 'session')
+  ensureObject(limits, 'limits')
+  const { maxSummaryChars = 2000, maxTurns = 6 } = limits
+
+  const turn = createSessionTurn(userPrompt, result)
+  ensureSessionHistory(session)
+  session.history.push(turn)
+  compactSessionHistory(session, maxTurns, maxSummaryChars)
 }
 
 /**
@@ -62,7 +83,7 @@ export function buildSessionContextBlock(session) {
   if (session.summary) {
     parts.push(`SHRNUTÍ PŘEDCHOZÍCH KROKŮ:\n${session.summary}`)
   }
-  if (session.history.length > 0) {
+  if (Array.isArray(session.history) && session.history.length > 0) {
     const historyLines = session.history
       .map((turn) => toTurnLine(turn))
       .join('\n')

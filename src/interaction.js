@@ -1,8 +1,11 @@
 /**
  * @file Interactive user input handling for name refinement.
  */
+
 import path from 'node:path'
 
+import { CONFIG } from './config.js'
+import { logger } from './logger.js'
 import { assembleFilename, getMtimeDate, parseProposedName } from './rename.js'
 import {
   closePreview,
@@ -10,7 +13,17 @@ import {
   sanitizeUserInput,
   showInputDialog,
 } from './ui.js'
+import { ensureObject } from './utilities.js'
 
+/**
+ * Builds proposed filename for the dialog.
+ * @param {object} current - Current discovery state.
+ * @param {string} current.date - Current date.
+ * @param {string} current.company - Current company.
+ * @param {string} current.title - Current title.
+ * @param {string} absPath - Absolute file path.
+ * @returns {string} Proposed filename.
+ */
 export function buildProposedName(current, absPath) {
   let isMtime = false
   let currentDate = current.date
@@ -62,24 +75,30 @@ function buildDashboard(suggestions) {
 }
 
 function applyCategorizedSelection(userInput, suggestions, current) {
-  const index = Number.parseInt(userInput, 10)
-  if (Number.isNaN(index)) return false
+  const digits = [...userInput.trim()]
+  if (digits.length === 0 || !digits.every((d) => /^[1-9]$/.test(d))) {
+    return false
+  }
 
   const ranges = [
     { start: 1, end: 3, key: 'date', values: suggestions.dates },
     { start: 4, end: 6, key: 'company', values: suggestions.companies },
     { start: 7, end: 9, key: 'title', values: suggestions.titles },
   ]
-  const selected = ranges.find(
-    (range) => index >= range.start && index <= range.end
-  )
-  if (!selected) return false
 
-  const offset = index - selected.start
-  const value = selected.values[offset]
-  if (!value) return false
-
-  current[selected.key] = value
+  for (const digit of digits) {
+    const index = Number.parseInt(digit, 10)
+    const selected = ranges.find(
+      (range) => index >= range.start && index <= range.end
+    )
+    if (selected) {
+      const offset = index - selected.start
+      const value = selected.values[offset]
+      if (value) {
+        current[selected.key] = value
+      }
+    }
+  }
   return true
 }
 
@@ -102,15 +121,18 @@ function processAction(result, context) {
     return { type: 'skip' }
   }
 
-  const input = result.text.trim().toLowerCase()
-  if (result.button === 'OK' && (input === '/ok' || input === ''))
+  const input = result.text.trim()
+  const lowerInput = input.toLowerCase()
+
+  if (result.button === 'OK' && (lowerInput === '/ok' || lowerInput === '')) {
     return { type: 'done' }
-  if (input === '/skip') return { type: 'skip' }
-  if (input.startsWith('/ai ')) return { type: 'ai_prompt' }
-  if (
-    applyCategorizedSelection(result.text, context.suggestions, context.current)
-  )
+  }
+  if (lowerInput === '/skip') return { type: 'skip' }
+  if (lowerInput.startsWith('/ai ')) return { type: 'ai_prompt' }
+
+  if (applyCategorizedSelection(input, context.suggestions, context.current)) {
     return { type: 'shortcut' }
+  }
   return { type: 'manual' }
 }
 
@@ -120,7 +142,7 @@ function formatAiFeedback(visionCheck) {
   const isWarning =
     lower.includes('nečitelný') ||
     lower.includes('garbled') ||
-    lower.includes('čitelnost: [0-5]')
+    lower.includes('čitelnost: [0-5]') // This literal marks an unfilled template value.
   const icon = isWarning ? '⚠️ VAROVÁNÍ AI' : '🤖 AI'
   return `${icon}: ${visionCheck}\n\n`
 }
@@ -151,63 +173,97 @@ function getDialogAction(current, fileName, pageStats, absPath) {
   return { action, dialogResult }
 }
 
+let warnedInvalidInteractionMaxSteps = false
+
+function assertWithinInteractionLimit(iterations) {
+  const configuredLimit = CONFIG.INTERACTION_MAX_STEPS
+  const limit =
+    Number.isFinite(configuredLimit) &&
+    Number.isInteger(configuredLimit) &&
+    configuredLimit > 0
+      ? configuredLimit
+      : 100
+
+  if (limit !== configuredLimit && !warnedInvalidInteractionMaxSteps) {
+    warnedInvalidInteractionMaxSteps = true
+    logger.warn(
+      `Invalid INTERACTION_MAX_STEPS config; using fallback limit=${limit}, current=${iterations}`
+    )
+  }
+
+  if (iterations > limit * 0.8) {
+    logger.warn(
+      `Interaction limit warning: limit=${limit}, current=${iterations}`
+    )
+  }
+  if (iterations > limit) {
+    throw new Error(
+      `Interaction limit exceeded: limit=${limit}, current=${iterations}`
+    )
+  }
+}
+
+function buildFinalResult(action, dialogResult, current) {
+  const final =
+    action.type === 'done'
+      ? current
+      : {
+          ...current,
+          ...parseProposedName(sanitizeUserInput(dialogResult.text)),
+        }
+  return {
+    company:
+      final.company || current.company || sanitizeUserInput(dialogResult.text),
+    discovery: { ...current, ...final },
+  }
+}
+
+async function handleIterativeLoop(parameters, state) {
+  const { absPath, discovery, pages } = parameters
+  const fileName = path.basename(absPath)
+  const safePagesLength = pages?.length ?? 0
+  const pageStats = `${discovery.pagesAnalyzed ?? Math.min(safePagesLength, 3)}/${safePagesLength}`
+  let iterations = 0
+  while (true) {
+    iterations += 1
+    assertWithinInteractionLimit(iterations)
+    const { action, dialogResult } = getDialogAction(
+      state.current,
+      fileName,
+      pageStats,
+      absPath
+    )
+    if (action.type === 'ai_prompt') {
+      state.current = await handleAiPrompt(dialogResult.text, {
+        ...parameters,
+        current: state.current,
+      })
+      continue
+    }
+    if (action.type === 'shortcut') continue
+    if (action.type === 'skip') throw new Error('Soubor přeskočen uživatelem')
+    return buildFinalResult(action, dialogResult, state.current)
+  }
+}
+
 /**
  * Runs iterative manual refinement for discovered file metadata.
- * @param {object} params - Input parameters.
- * @param {string} params.absPath - Absolute file path.
- * @param {object} params.discovery - Initial discovery payload.
- * @param {Array<object>} params.pages - OCR page data.
- * @param {string} params.originalNameOnly - Original filename without extension.
- * @param {(params: object) => Promise<object>} params.runDiscovery - Discovery function for /ai prompts.
- * @param {object} [params.aiSession] - Per-file AI session state.
- * @returns {Promise<object>} Final company and merged discovery object.
+ * @param {object} parameters - Input parameters.
+ * @param {string} parameters.absPath - Absolute file path.
+ * @param {import('./discovery.js').DiscoveryResult} parameters.discovery - Initial discovery payload.
+ * @param {Array<import('./ocr.js').OCRPage>} parameters.pages - OCR page data.
+ * @param {string} parameters.originalNameOnly - Original filename without extension.
+ * @param {function(object): Promise<import('./discovery.js').DiscoveryResult>} parameters.runDiscovery - Discovery function for /ai prompts.
+ * @param {object} [parameters.aiSession] - Per-file AI session state.
+ * @returns {Promise<{company: string, discovery: import('./discovery.js').DiscoveryResult}>} Final company and merged discovery object.
  */
-export async function handleIterativeInput({
-  absPath,
-  aiSession,
-  discovery,
-  pages,
-  originalNameOnly,
-  runDiscovery,
-}) {
-  let current = discovery
-  const fileName = path.basename(absPath)
-  const pageStats = `${discovery.pagesAnalyzed ?? Math.min(pages.length, 3)}/${pages.length}`
-  openPreview(absPath)
+export async function handleIterativeInput(parameters) {
+  ensureObject(parameters, 'parameters')
+  const state = { current: parameters.discovery }
+  openPreview(parameters.absPath)
   try {
-    while (true) {
-      const { action, dialogResult } = getDialogAction(
-        current,
-        fileName,
-        pageStats,
-        absPath
-      )
-      if (action.type === 'ai_prompt') {
-        current = await handleAiPrompt(dialogResult.text, {
-          aiSession,
-          pages,
-          originalNameOnly,
-          runDiscovery,
-          current,
-        })
-        continue
-      }
-      if (action.type === 'shortcut') continue
-      if (action.type === 'skip') throw new Error('Soubor přeskočen uživatelem')
-      closePreview(fileName)
-      const final =
-        action.type === 'done'
-          ? current
-          : parseProposedName(sanitizeUserInput(dialogResult.text))
-      return {
-        company:
-          final.company ||
-          current.company ||
-          sanitizeUserInput(dialogResult.text),
-        discovery: { ...current, ...final },
-      }
-    }
+    return await handleIterativeLoop(parameters, state)
   } finally {
-    closePreview(fileName)
+    closePreview(parameters.absPath)
   }
 }
