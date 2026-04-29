@@ -20,14 +20,12 @@
     "check:audit": "pnpm audit --prod --audit-level high",
     "check:review": "coderabbit review",
     "review:copilot": "node review-copilot.js",
-    "check:quality": "pnpm check:lint && pnpm check:unused && pnpm check:dupe && pnpm check:deps",
-    "check:quality-full": "pnpm check:quality && pnpm check:audit",
-    "check:all": "pnpm check:quality-full && pnpm check:review",
+    "check:all": "pnpm check:lint && pnpm check:unused && pnpm check:dupe && pnpm check:deps && pnpm check:audit",
     "prepare": "simple-git-hooks"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm lint-staged",
-    "pre-push": "pnpm check:quality-full"
+    "pre-push": "pnpm check:all"
   },
   "lint-staged": {
     "*.{js,md,json}": "pnpm fix:format"
